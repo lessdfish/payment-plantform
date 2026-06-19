@@ -1,0 +1,27 @@
+{
+  "title": "对账面板",
+  "panels": [
+    {
+      "title": "对账差异数量",
+      "targets": [{
+        "expr": "reconciliation_diff_total{job=\"reconciliation-service\"}"
+      }],
+      "description": "Canal 实时对账发现的差异笔数。> 0 需要关注。",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 6}
+    },
+    {
+      "title": "对账处理率 (%)",
+      "targets": [
+        { "expr": "sum(reconciliation_diff_total{status=\"RESOLVED\"}) / sum(reconciliation_diff_total)", "legendFormat": "已处理" },
+        { "expr": "sum(reconciliation_diff_total{status=\"PENDING\"}) / sum(reconciliation_diff_total)", "legendFormat": "待处理" }
+      ],
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 6}
+    },
+    {
+      "title": "日终对账执行状态",
+      "targets": [],
+      "gridPos": {"x": 0, "y": 6, "w": 12, "h": 6},
+      "description": "XXL-JOB 每日对账任务执行日志（在 XXL-JOB 管理台查看）。"
+    }
+  ]
+}

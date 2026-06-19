@@ -1,0 +1,41 @@
+{
+  "title": "账户服务",
+  "panels": [
+    {
+      "title": "TCC Try 请求量",
+      "targets": [{
+        "expr": "rate(http_server_requests_seconds_count{job=\"account-service\",uri=\"/api/v1/account/tcc/try\"}[1m])"
+      }], "gridPos": {"x": 0, "y": 0, "w": 8, "h": 7}
+    },
+    {
+      "title": "TCC Confirm 成功率 (%)",
+      "targets": [{
+        "expr": "sum(rate(http_server_requests_seconds_count{job=\"account-service\",uri=\"/api/v1/account/tcc/confirm\",status=\"200\"}[1m])) / sum(rate(http_server_requests_seconds_count{job=\"account-service\",uri=\"/api/v1/account/tcc/confirm\"}[1m])) * 100"
+      }], "gridPos": {"x": 8, "y": 0, "w": 8, "h": 7}
+    },
+    {
+      "title": "TCC Cancel 次数（异常回滚）",
+      "targets": [{
+        "expr": "rate(http_server_requests_seconds_count{job=\"account-service\",uri=\"/api/v1/account/tcc/cancel\"}[1m])"
+      }], "gridPos": {"x": 16, "y": 0, "w": 8, "h": 7}
+    },
+    {
+      "title": "账户查询请求量",
+      "targets": [{
+        "expr": "rate(http_server_requests_seconds_count{job=\"account-service\",uri=\"/api/v1/account/balance/.*\"}[1m])"
+      }], "gridPos": {"x": 0, "y": 7, "w": 8, "h": 7}
+    },
+    {
+      "title": "JVM 堆内存 (MB)",
+      "targets": [{
+        "expr": "jvm_memory_used_bytes{job=\"account-service\",area=\"heap\"} / 1048576"
+      }], "gridPos": {"x": 8, "y": 7, "w": 8, "h": 7}
+    },
+    {
+      "title": "数据库连接池",
+      "targets": [{
+        "expr": "hikaricp_connections_active{job=\"account-service\"}"
+      }], "gridPos": {"x": 16, "y": 7, "w": 8, "h": 7}
+    }
+  ]
+}

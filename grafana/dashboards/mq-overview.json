@@ -1,0 +1,31 @@
+{
+  "title": "MQ 概览",
+  "panels": [
+    {
+      "title": "Kafka 消费延迟 (records)",
+      "targets": [{
+        "expr": "sum(kafka_consumer_records_lag{job=\"reconciliation-service\"}) by (topic)"
+      }], "gridPos": {"x": 0, "y": 0, "w": 12, "h": 7}
+    },
+    {
+      "title": "Kafka 消费速率 (records/s)",
+      "targets": [{
+        "expr": "rate(kafka_consumer_records_consumed_total{job=\"reconciliation-service\"}[1m])"
+      }], "gridPos": {"x": 12, "y": 0, "w": 12, "h": 7}
+    },
+    {
+      "title": "JVM 线程数",
+      "targets": [
+        { "expr": "jvm_threads_live_threads{job=\"payment-gateway\"}", "legendFormat": "gateway" },
+        { "expr": "jvm_threads_live_threads{job=\"account-service\"}", "legendFormat": "account" },
+        { "expr": "jvm_threads_live_threads{job=\"order-service\"}", "legendFormat": "order" }
+      ], "gridPos": {"x": 0, "y": 7, "w": 12, "h": 7}
+    },
+    {
+      "title": "各服务 CPU 使用率",
+      "targets": [{
+        "expr": "system_cpu_usage{job=~\"payment-gateway|account-service|order-service\"}"
+      }], "gridPos": {"x": 12, "y": 7, "w": 12, "h": 7}
+    }
+  ]
+}

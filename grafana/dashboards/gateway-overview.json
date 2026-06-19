@@ -1,0 +1,35 @@
+{
+  "title": "网关总览",
+  "panels": [
+    {
+      "title": "支付 QPS",
+      "targets": [{
+        "expr": "rate(http_server_requests_seconds_count{job=\"payment-gateway\",uri=\"/api/v1/pay/create\"}[1m])"
+      }], "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8}
+    },
+    {
+      "title": "支付 P99 延迟 (ms)",
+      "targets": [{
+        "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{job=\"payment-gateway\",uri=\"/api/v1/pay/create\"}[1m])) by (le)) * 1000"
+      }], "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8}
+    },
+    {
+      "title": "支付成功率 (%)",
+      "targets": [{
+        "expr": "sum(rate(http_server_requests_seconds_count{job=\"payment-gateway\",uri=\"/api/v1/pay/create\",status=\"200\"}[1m])) / sum(rate(http_server_requests_seconds_count{job=\"payment-gateway\",uri=\"/api/v1/pay/create\"}[1m])) * 100"
+      }], "gridPos": {"x": 0, "y": 8, "w": 8, "h": 7}
+    },
+    {
+      "title": "错误分布",
+      "targets": [{
+        "expr": "sum(rate(http_server_requests_seconds_count{job=\"payment-gateway\",uri=\"/api/v1/pay/create\",status!=\"200\"}[1m])) by (status)"
+      }], "gridPos": {"x": 8, "y": 8, "w": 8, "h": 7}
+    },
+    {
+      "title": "JVM 堆内存 (MB)",
+      "targets": [{
+        "expr": "jvm_memory_used_bytes{job=\"payment-gateway\",area=\"heap\"} / 1048576"
+      }], "gridPos": {"x": 16, "y": 8, "w": 8, "h": 7}
+    }
+  ]
+}

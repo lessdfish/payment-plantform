@@ -1,0 +1,16 @@
+# Promtail 日志采集配置 — 采集支付系统各服务日志
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: payment-logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: payment-platform
+          __path__: /var/log/payment/*.log
