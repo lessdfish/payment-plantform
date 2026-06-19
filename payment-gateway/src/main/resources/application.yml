@@ -21,3 +21,12 @@ rocketmq:
   name-server: localhost:9876
   producer:
     group: payment-gateway-producer
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    prometheus:
+      enabled: true

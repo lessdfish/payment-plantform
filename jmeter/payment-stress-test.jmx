@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="支付系统压测" enabled="true">
+      <stringProp name="TestPlan.comments">5 个场景：正常支付/峰值支付/幂等/退款/混合
+运行前: 1)启动 Docker 2)启动全部7个服务 3)运行 Setup 脚本获取测试密钥
+      </stringProp>
+      <boolProp name="TestPlan.functional_mode">false</boolProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments">
+        <collectionProp name="Arguments.arguments">
+          <elementProp name="BASE_URL" elementType="Argument">
+            <stringProp name="Argument.name">BASE_URL</stringProp>
+            <stringProp name="Argument.value">http://localhost:8080</stringProp>
+          </elementProp>
+          <elementProp name="MERCHANT_URL" elementType="Argument">
+            <stringProp name="Argument.name">MERCHANT_URL</stringProp>
+            <stringProp name="Argument.value">http://localhost:8085</stringProp>
+          </elementProp>
+          <elementProp name="ACCOUNT_URL" elementType="Argument">
+            <stringProp name="Argument.name">ACCOUNT_URL</stringProp>
+            <stringProp name="Argument.value">http://localhost:8081</stringProp>
+          </elementProp>
+          <elementProp name="MERCHANT_ID" elementType="Argument">
+            <stringProp name="Argument.name">MERCHANT_ID</stringProp>
+            <stringProp name="Argument.value">CHANGE_ME</stringProp>
+          </elementProp>
+          <elementProp name="PRIVATE_KEY" elementType="Argument">
+            <stringProp name="Argument.name">PRIVATE_KEY</stringProp>
+            <stringProp name="Argument.value">CHANGE_ME</stringProp>
+          </elementProp>
+          <elementProp name="PUBLIC_KEY" elementType="Argument">
+            <stringProp name="Argument.name">PUBLIC_KEY</stringProp>
+            <stringProp name="Argument.value">CHANGE_ME</stringProp>
+          </elementProp>
+        </collectionProp>
+      </elementProp>
+    </TestPlan>
+
+    <!-- ================================================================ -->
+    <!-- 场景 1：正常支付 50 线程 × 5 分钟 -->
+    <!-- ================================================================ -->
+    <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="场景1-正常支付(50线程)" enabled="true">
+      <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+      <elementProp name="ThreadGroup.main_controller" elementType="LoopController">
+        <boolProp name="LoopController.continue_forever">true</boolProp>
+      </elementProp>
+      <stringProp name="ThreadGroup.num_threads">50</stringProp>
+      <stringProp name="ThreadGroup.ramp_time">10</stringProp>
+      <boolProp name="ThreadGroup.scheduler">true</boolProp>
+      <stringProp name="ThreadGroup.duration">300</stringProp>
+    </ThreadGroup>
+    <hashTree>
+      <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="正常支付" enabled="true">
+        <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+        <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+          <collectionProp name="Arguments.arguments">
+            <elementProp name="" elementType="HTTPArgument">
+              <boolProp name="HTTPArgument.always_encode">false</boolProp>
+              <stringProp name="Argument.value">{"outTradeNo":"STRESS_NORMAL_${__time(,)}_${__threadNum}","merchantId":${MERCHANT_ID},"amount":99.99,"currency":"CNY","notifyUrl":"https://test.com/callback","subject":"压测商品"}</stringProp>
+            </elementProp>
+          </collectionProp>
+        </elementProp>
+        <stringProp name="HTTPSampler.domain"></stringProp>
+        <stringProp name="HTTPSampler.path">/api/v1/pay/create</stringProp>
+        <stringProp name="HTTPSampler.method">POST</stringProp>
+        <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+        <stringProp name="HTTPSampler.implementation">HttpClient4</stringProp>
+      </HTTPSamplerProxy>
+      <hashTree>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP头" enabled="true">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header">
+              <stringProp name="Header.name">Content-Type</stringProp>
+              <stringProp name="Header.value">application/json</stringProp>
+            </elementProp>
+          </collectionProp>
+        </HeaderManager>
+      </hashTree>
+    </hashTree>
+
+    <!-- ================================================================ -->
+    <!-- 场景 2：峰值支付 200 线程 × 2 分钟 -->
+    <!-- ================================================================ -->
+    <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="场景2-峰值支付(200线程)" enabled="true">
+      <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+      <elementProp name="ThreadGroup.main_controller" elementType="LoopController">
+        <boolProp name="LoopController.continue_forever">true</boolProp>
+      </elementProp>
+      <stringProp name="ThreadGroup.num_threads">200</stringProp>
+      <stringProp name="ThreadGroup.ramp_time">20</stringProp>
+      <boolProp name="ThreadGroup.scheduler">true</boolProp>
+      <stringProp name="ThreadGroup.duration">120</stringProp>
+    </ThreadGroup>
+    <hashTree>
+      <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="峰值支付" enabled="true">
+        <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+        <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+          <collectionProp name="Arguments.arguments">
+            <elementProp name="" elementType="HTTPArgument">
+              <boolProp name="HTTPArgument.always_encode">false</boolProp>
+              <stringProp name="Argument.value">{"outTradeNo":"STRESS_PEAK_${__time(,)}_${__threadNum}","merchantId":${MERCHANT_ID},"amount":99.99,"currency":"CNY","notifyUrl":"https://test.com/callback","subject":"压测商品"}</stringProp>
+            </elementProp>
+          </collectionProp>
+        </elementProp>
+        <stringProp name="HTTPSampler.path">/api/v1/pay/create</stringProp>
+        <stringProp name="HTTPSampler.method">POST</stringProp>
+      </HTTPSamplerProxy>
+      <hashTree>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP头" enabled="true">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header">
+              <stringProp name="Header.name">Content-Type</stringProp>
+              <stringProp name="Header.value">application/json</stringProp>
+            </elementProp>
+          </collectionProp>
+        </HeaderManager>
+      </hashTree>
+    </hashTree>
+
+    <!-- ================================================================ -->
+    <!-- 场景 3：幂等压测 100 线程同一 outTradeNo -->
+    <!-- ================================================================ -->
+    <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="场景3-幂等压测(100线程)" enabled="true">
+      <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+      <elementProp name="ThreadGroup.main_controller" elementType="LoopController">
+        <boolProp name="LoopController.continue_forever">true</boolProp>
+      </elementProp>
+      <stringProp name="ThreadGroup.num_threads">100</stringProp>
+      <stringProp name="ThreadGroup.ramp_time">5</stringProp>
+      <boolProp name="ThreadGroup.scheduler">true</boolProp>
+      <stringProp name="ThreadGroup.duration">60</stringProp>
+    </ThreadGroup>
+    <hashTree>
+      <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="幂等支付" enabled="true">
+        <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+        <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+          <collectionProp name="Arguments.arguments">
+            <elementProp name="" elementType="HTTPArgument">
+              <boolProp name="HTTPArgument.always_encode">false</boolProp>
+              <stringProp name="Argument.value">{"outTradeNo":"IDEMPOTENT_SAME_KEY","merchantId":${MERCHANT_ID},"amount":1.00,"currency":"CNY","notifyUrl":"https://test.com/callback","subject":"幂等压测"}</stringProp>
+            </elementProp>
+          </collectionProp>
+        </elementProp>
+        <stringProp name="HTTPSampler.path">/api/v1/pay/create</stringProp>
+        <stringProp name="HTTPSampler.method">POST</stringProp>
+      </HTTPSamplerProxy>
+      <hashTree>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP头" enabled="true">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header">
+              <stringProp name="Header.name">Content-Type</stringProp>
+              <stringProp name="Header.value">application/json</stringProp>
+            </elementProp>
+          </collectionProp>
+        </HeaderManager>
+      </hashTree>
+    </hashTree>
+
+    <!-- ================================================================ -->
+    <!-- 场景 4：退款压测 20 线程 × 3 分钟 -->
+    <!-- ================================================================ -->
+    <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="场景4-退款(20线程)" enabled="true">
+      <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+      <elementProp name="ThreadGroup.main_controller" elementType="LoopController">
+        <boolProp name="LoopController.continue_forever">true</boolProp>
+      </elementProp>
+      <stringProp name="ThreadGroup.num_threads">20</stringProp>
+      <stringProp name="ThreadGroup.ramp_time">5</stringProp>
+      <boolProp name="ThreadGroup.scheduler">true</boolProp>
+      <stringProp name="ThreadGroup.duration">180</stringProp>
+    </ThreadGroup>
+    <hashTree>
+      <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="退款" enabled="true">
+        <stringProp name="HTTPSampler.path">/api/v1/refund/apply</stringProp>
+        <stringProp name="HTTPSampler.method">POST</stringProp>
+        <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+          <collectionProp name="Arguments.arguments">
+            <elementProp name="outRefundNo" elementType="HTTPArgument">
+              <boolProp name="HTTPArgument.always_encode">true</boolProp>
+              <stringProp name="Argument.name">outRefundNo</stringProp>
+              <stringProp name="Argument.value">STRESS_REFUND_${__time(,)}_${__threadNum}</stringProp>
+            </elementProp>
+            <elementProp name="originOrderNo" elementType="HTTPArgument">
+              <boolProp name="HTTPArgument.always_encode">true</boolProp>
+              <stringProp name="Argument.name">originOrderNo</stringProp>
+              <stringProp name="Argument.value">CHANGE_ME_ORDER_NO</stringProp>
+            </elementProp>
+            <elementProp name="merchantId" elementType="HTTPArgument">
+              <boolProp name="HTTPArgument.always_encode">true</boolProp>
+              <stringProp name="Argument.name">merchantId</stringProp>
+              <stringProp name="Argument.value">${MERCHANT_ID}</stringProp>
+            </elementProp>
+            <elementProp name="refundAmount" elementType="HTTPArgument">
+              <boolProp name="HTTPArgument.always_encode">true</boolProp>
+              <stringProp name="Argument.name">refundAmount</stringProp>
+              <stringProp name="Argument.value">0.01</stringProp>
+            </elementProp>
+          </collectionProp>
+        </elementProp>
+      </HTTPSamplerProxy>
+      <hashTree/>
+    </hashTree>
+
+    <!-- ================================================================ -->
+    <!-- 场景 5：混合场景 100 线程支付+查询 -->
+    <!-- ================================================================ -->
+    <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="场景5-混合场景(100线程)" enabled="true">
+      <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+      <elementProp name="ThreadGroup.main_controller" elementType="LoopController">
+        <boolProp name="LoopController.continue_forever">true</boolProp>
+      </elementProp>
+      <stringProp name="ThreadGroup.num_threads">100</stringProp>
+      <stringProp name="ThreadGroup.ramp_time">15</stringProp>
+      <boolProp name="ThreadGroup.scheduler">true</boolProp>
+      <stringProp name="ThreadGroup.duration">180</stringProp>
+    </ThreadGroup>
+    <hashTree>
+      <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="混合-支付(60%)" enabled="true">
+        <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+        <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+          <collectionProp name="Arguments.arguments">
+            <elementProp name="" elementType="HTTPArgument">
+              <boolProp name="HTTPArgument.always_encode">false</boolProp>
+              <stringProp name="Argument.value">{"outTradeNo":"STRESS_MIX_${__time(,)}_${__threadNum}","merchantId":${MERCHANT_ID},"amount":${__Random(1,500)}.${__Random(00,99)},"currency":"CNY","notifyUrl":"https://test.com/callback","subject":"混合压测"}</stringProp>
+            </elementProp>
+          </collectionProp>
+        </elementProp>
+        <stringProp name="HTTPSampler.path">/api/v1/pay/create</stringProp>
+        <stringProp name="HTTPSampler.method">POST</stringProp>
+      </HTTPSamplerProxy>
+      <hashTree>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP头" enabled="true">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header">
+              <stringProp name="Header.name">Content-Type</stringProp>
+              <stringProp name="Header.value">application/json</stringProp>
+            </elementProp>
+          </collectionProp>
+        </HeaderManager>
+        <ThroughputController guiclass="ThroughputControllerGui" testclass="ThroughputController" testname="60%占比" enabled="true">
+          <intProp name="ThroughputController.style">1</intProp>
+          <stringProp name="ThroughputController.percentThroughput">60.0</stringProp>
+        </ThroughputController>
+      </hashTree>
+    </hashTree>
+
+    <!-- ================================================================ -->
+    <!-- 监听器 -->
+    <!-- ================================================================ -->
+    <ResultCollector guiclass="ViewResultsFullVisualizer" testclass="ResultCollector" testname="View Results Tree" enabled="false"/>
+    <ResultCollector guiclass="SummaryReport" testclass="ResultCollector" testname="Summary Report" enabled="true"/>
+    <ResultCollector guiclass="StatVisualizer" testclass="ResultCollector" testname="Aggregate Report" enabled="true"/>
+
+  </hashTree>
+</jmeterTestPlan>

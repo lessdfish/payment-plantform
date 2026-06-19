@@ -5,7 +5,7 @@ import com.payment.platform.common.dto.request.PayQueryRequest;
 import com.payment.platform.common.dto.request.PayRequest;
 import com.payment.platform.common.dto.response.PayQueryResponse;
 import com.payment.platform.common.dto.response.PayResponse;
-import com.payment.platform.common.exception.BalanceInsufficientException;
+import com.payment.platform.common.exception.BusinessException;
 import com.payment.platform.common.exception.ChannelException;
 import com.payment.platform.common.exception.DuplicateRequestException;
 import com.payment.platform.common.exception.SignatureException;
@@ -84,8 +84,7 @@ public class PayServiceImpl implements PayService {
         RiskCheckResult riskResult = riskService.check(request, clientIp);
         if (!riskResult.isPassed()) {
             log.warn("[PAY] 风控拦截: merchantId={}, reason={}", merchantId, riskResult.getRejectReason());
-            throw new BalanceInsufficientException(/* Phase 4 用独立异常 */
-                    java.math.BigDecimal.ZERO, request.getAmount());
+            throw new BusinessException(riskResult.getErrorCode(), riskResult.getRejectReason());
         }
 
         // 4. 渠道路由
@@ -179,9 +178,14 @@ public class PayServiceImpl implements PayService {
             accountClient.confirm(tryResult.getTccId());
 
             // 发送 RocketMQ 支付成功事件（order-service + notification-service 消费）
-            orderClient.sendPaySuccessEvent(request.getOutTradeNo(),
-                    request.getMerchantId(), request.getAmount(),
-                    channelResponse.getChannelOrderNo());
+            try {
+                orderClient.sendPaySuccessEvent(request.getOutTradeNo(),
+                        request.getMerchantId(), request.getAmount(),
+                        channelResponse.getChannelOrderNo());
+            } catch (Exception mqEx) {
+                log.error("[PAY] 支付已确认，支付成功事件发送失败: outTradeNo={}",
+                        request.getOutTradeNo(), mqEx);
+            }
 
             log.info("[PAY] TCC扣款完成: outTradeNo={}, tccId={}",
                     request.getOutTradeNo(), tryResult.getTccId());

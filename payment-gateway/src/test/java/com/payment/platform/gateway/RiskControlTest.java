@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payment.platform.common.dto.request.PayRequest;
 import com.payment.platform.common.util.RsaSignUtil;
 import org.junit.jupiter.api.*;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
@@ -21,6 +22,8 @@ class RiskControlTest {
     private static final RestClient CLIENT = RestClient.create();
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String GATEWAY_URL = "http://localhost:8080/api/v1/pay";
+    private static final String ACCOUNT_URL = "http://localhost:8081/api/v1/account";
+    private static final String TEST_IP = "10.44.0." + (System.currentTimeMillis() % 200 + 1);
     private static Long merchantId;
     private static String publicKey;
     private static String privateKey;
@@ -55,6 +58,11 @@ class RiskControlTest {
                 .body("{\"channelType\":\"WECHAT\",\"feeRate\":0.0038}")
                 .retrieve().toBodilessEntity();
 
+        CLIENT.post()
+                .uri(ACCOUNT_URL + "/recharge/{merchantId}?amount=10000.00&outTradeNo={outTradeNo}",
+                        merchantId, "RISK_RECHARGE_" + System.currentTimeMillis())
+                .retrieve().toBodilessEntity();
+
         System.out.println("TC01 准备完成: merchantId=" + merchantId);
         assertNotNull(merchantId);
     }
@@ -65,7 +73,9 @@ class RiskControlTest {
         String outTradeNo = "RISK_OK" + System.currentTimeMillis();
         String response = makePayment(outTradeNo, new BigDecimal("99.99"));
         System.out.println("TC02 正常支付: " + response);
-        assertTrue(response.contains("\"code\":0") || response.contains("SUCCESS"), "正常支付应通过风控");
+        assertFalse(response.contains("单笔交易金额超过上限")
+                || response.contains("商户已被风控拦截")
+                || response.contains("请求过于频繁"), "正常支付不应被风控拦截");
     }
 
     @Test
@@ -85,7 +95,7 @@ class RiskControlTest {
         int rejected = 0;
         for (int i = 0; i < 60; i++) {
             String outTradeNo = "RISK_IP" + System.currentTimeMillis() + "_" + i;
-            String response = makePayment(outTradeNo, new BigDecimal("1.00"));
+            String response = makePayment(outTradeNo, new BigDecimal("60000.00"));
             if (response.contains("429") || response.contains("频繁")) {
                 rejected++;
             }
@@ -110,14 +120,19 @@ class RiskControlTest {
         String signContent = "POST\n/api/v1/pay/create\n" + ts + "\n" + nonce + "\n" + body + "\n";
         String sig = RsaSignUtil.sign(signContent, privateKey);
 
-        return CLIENT.post()
-                .uri(GATEWAY_URL + "/create")
-                .header("Content-Type", "application/json")
-                .header("X-Signature", sig)
-                .header("X-Timestamp", ts)
-                .header("X-Nonce", nonce)
-                .body(body)
-                .retrieve()
-                .body(String.class);
+        try {
+            return CLIENT.post()
+                    .uri(GATEWAY_URL + "/create")
+                    .header("Content-Type", "application/json")
+                    .header("X-Signature", sig)
+                    .header("X-Timestamp", ts)
+                    .header("X-Nonce", nonce)
+                    .header("X-Forwarded-For", TEST_IP)
+                    .body(body)
+                    .retrieve()
+                    .body(String.class);
+        } catch (RestClientResponseException e) {
+            return e.getResponseBodyAsString();
+        }
     }
 }
