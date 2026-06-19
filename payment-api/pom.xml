@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.payment</groupId>
+        <artifactId>payment-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>payment-api</artifactId>
+    <name>Payment API</name>
+    <description>商户接入 SDK：DTO 定义、签名工具、接入文档</description>
+    <dependencies>
+        <dependency>
+            <groupId>com.payment</groupId>
+            <artifactId>payment-common</artifactId>
+        </dependency>
+    </dependencies>
+</project>
