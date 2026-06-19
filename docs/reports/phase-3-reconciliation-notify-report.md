@@ -48,9 +48,31 @@ BUILD SUCCESS — 9/9 模块
 
 ## 验收
 
-1. 启动 reconciliation-service（8084）+ notification-service（8083）
-2. 观察启动日志，确认 XXL-JOB 执行器注册、Kafka consumer 就绪
-3. RocketMQ 发送消息 → 检查消费者是否收到
+### 验收 1：编译
+```bash
+cd F:/test_file/NoIdea && set JAVA_HOME=F:/Java/java21 && mvn clean compile -DskipTests
+```
+**预期：** `BUILD SUCCESS` 9/9 模块。
+
+### 验收 2：启动 reconciliation-service
+IDEA 启动 `ReconciliationApplication`（8084）。
+
+**预期：** 日志含 `XXL-JOB 执行器注册` + `Tomcat started on port 8084`。
+
+### 验收 3：启动 notification-service
+IDEA 启动 `NotificationApplication`（8083）。
+
+**预期：** 日志含 `Tomcat started on port 8083`。
+
+### 验收 4：XXL-JOB 调度中心
+浏览器 `http://localhost:8087/xxl-job-admin`（admin/123456）→ 执行器管理。
+
+**预期：** `reconciliation-service` 在线。
+
+### 验收 5：测试类
+IDEA 分别运行 `NotificationServiceTest`、`ReconciliationServiceTest`。
+
+**预期：** 全部通过。
 
 ---
 
