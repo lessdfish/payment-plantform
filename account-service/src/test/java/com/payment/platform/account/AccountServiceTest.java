@@ -4,6 +4,7 @@ import com.payment.platform.common.dto.request.CancelRequest;
 import com.payment.platform.common.dto.request.ConfirmRequest;
 import com.payment.platform.common.dto.request.TryRequest;
 import org.junit.jupiter.api.*;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
@@ -25,8 +26,8 @@ class AccountServiceTest {
     private static final RestClient CLIENT = RestClient.create();
     private static final String BASE_URL = "http://localhost:8081/api/v1/account";
 
-    private static final Long MERCHANT_ID = 999001L;
-    private static final Long MERCHANT_ID_2 = 999002L;
+    private static final Long MERCHANT_ID = 9_000_000_000L + (System.currentTimeMillis() % 1_000_000L) * 10;
+    private static final Long MERCHANT_ID_2 = MERCHANT_ID + 1;
     private static String tccId;
 
     /**
@@ -194,11 +195,16 @@ class AccountServiceTest {
         req.setAmount(new BigDecimal("999999.00")); // 远超可用余额
         req.setBizOrderNo("BIZ_FAIL" + System.currentTimeMillis());
 
-        String response = CLIENT.post()
-                .uri(BASE_URL + "/tcc/try")
-                .body(req)
-                .retrieve()
-                .body(String.class);
+        String response;
+        try {
+            response = CLIENT.post()
+                    .uri(BASE_URL + "/tcc/try")
+                    .body(req)
+                    .retrieve()
+                    .body(String.class);
+        } catch (HttpClientErrorException e) {
+            response = e.getResponseBodyAsString();
+        }
         System.out.println("TC07 余额不足: " + response);
         assertTrue(response.contains("42201"), "余额不足应返回 42201");
     }

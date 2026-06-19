@@ -1,4 +1,4 @@
-package com.payment.platform.simulator.dto;
+package com.payment.platform.common.dto.event;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

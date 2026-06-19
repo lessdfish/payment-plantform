@@ -1,7 +1,7 @@
 package com.payment.platform.simulator.controller;
 
 import com.payment.platform.common.result.ApiResult;
-import com.payment.platform.simulator.dto.BillDTO;
+import com.payment.platform.common.dto.event.BillDTO;
 import com.payment.platform.simulator.service.SimulatorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

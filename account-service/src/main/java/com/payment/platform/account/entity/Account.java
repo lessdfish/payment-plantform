@@ -31,7 +31,7 @@ public class Account {
     private Long id;
 
     /** 商户 ID（唯一，分片键），一个商户只有一条账户记录 */
-    @Column(name = "merchant_id", nullable = false, unique = true)
+    @Column(name = "merchant_id", nullable = false, unique = true, updatable = false)
     private Long merchantId;
 
     /** 账户总余额（含冻结金额），如 10000.00 = 1 万元 */

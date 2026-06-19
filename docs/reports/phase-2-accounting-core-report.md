@@ -117,18 +117,7 @@ IDEA 右键 `AccountServiceTest` → Run，预期 7 个测试全部通过：
 运行 `PaymentIntegrationTest` — 支付请求会走完整链路：
 验签→风控→路由→渠道→**TCC Try→TCC Confirm**→MQ→订单创建→幂等
 
----
-
-## 五、遇到的问题 & 修复
-
-| 问题 | 修复 |
-|------|------|
-| ShardingSphereDriverFactory 导入失败 | 改用 YamlShardingSphereDataSourceFactory + YAML |
-| 跨模块 DTO 引用 | TCC DTO 移至 payment-common |
-| PayServiceImpl 缺 TryResponse import | 添加 import |
-| Windows jar 文件锁定 | taskkill java 进程后重新编译 |
-
-## 六、下一步
+六、下一步
 
 Phase 3：对账 & 通知
 - reconciliation-service + Canal + XXL-JOB

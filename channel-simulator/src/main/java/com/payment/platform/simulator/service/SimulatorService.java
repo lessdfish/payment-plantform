@@ -3,7 +3,7 @@ package com.payment.platform.simulator.service;
 import com.payment.platform.common.dto.request.ChannelPayRequest;
 import com.payment.platform.common.dto.response.ChannelPayResponse;
 import com.payment.platform.common.dto.response.ChannelQueryResponse;
-import com.payment.platform.simulator.dto.BillDTO;
+import com.payment.platform.common.dto.event.BillDTO;
 import com.payment.platform.simulator.entity.SimulatorConfig;
 
 import java.util.List;
