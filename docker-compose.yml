@@ -2,8 +2,6 @@
 # 一键启动命令：docker-compose up -d
 # 查看状态：docker-compose ps
 
-version: "3.9"
-
 services:
   # ==================== 注册 & 配置中心 ====================
   nacos:
@@ -75,7 +73,7 @@ services:
     image: redis:7.2
     container_name: payment-redis
     ports:
-      - "6379:6379"
+      - "16379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -103,7 +101,7 @@ services:
     command: sh mqbroker -n rocketmq-namesrv:9876
 
   kafka:
-    image: bitnami/kafka:3.7.0
+    image: bitnamilegacy/kafka:3.7.0-debian-12-r8
     container_name: payment-kafka
     ports:
       - "9092:9092"

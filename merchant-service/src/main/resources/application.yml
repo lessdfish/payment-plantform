@@ -1,8 +1,16 @@
 # 商户服务 — 本地开发配置
+server:
+  port: 8085
 
 spring:
+  application:
+    name: merchant-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
   datasource:
-    url: jdbc:mysql://localhost:3306/payment_merchant?useSSL=false&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/payment_merchant?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: root123
     driver-class-name: com.mysql.cj.jdbc.Driver

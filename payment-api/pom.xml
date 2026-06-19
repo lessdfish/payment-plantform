@@ -17,4 +17,17 @@
             <artifactId>payment-common</artifactId>
         </dependency>
     </dependencies>
+
+    <!-- 公共库模块不需要打包为可执行 JAR，跳过 repackage -->
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

@@ -1,11 +1,18 @@
-# 支付网关服务 — 本地开发配置
-# 生产配置通过 Nacos 下发，此文件仅用于本地开发
+# 支付网关 — 本地开发配置
+server:
+  port: 8080
 
 spring:
-  redis:
-    host: localhost
-    port: 6379
+  application:
+    name: payment-gateway
   cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
     sentinel:
       transport:
         dashboard: localhost:8858
+  data:
+    redis:
+      host: localhost
+      port: 16379
