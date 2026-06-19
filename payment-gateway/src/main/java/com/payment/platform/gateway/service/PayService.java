@@ -19,10 +19,11 @@ public interface PayService {
      * @param signature RSA 签名
      * @param timestamp 请求时间戳
      * @param nonce     随机字符串
+     * @param clientIp  客户端 IP
      * @return 支付响应
      */
     PayResponse createPay(PayRequest request, String signature,
-                          String timestamp, String nonce);
+                          String timestamp, String nonce, String clientIp);
 
     /**
      * 支付查询。

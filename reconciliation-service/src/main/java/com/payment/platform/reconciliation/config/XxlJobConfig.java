@@ -19,11 +19,15 @@ public class XxlJobConfig {
     @Value("${xxl.job.executor.appname:reconciliation-service}")
     private String appName;
 
+    @Value("${xxl.job.access-token:default_token}")
+    private String accessToken;
+
     @Bean
     public XxlJobSpringExecutor xxlJobSpringExecutor() {
         XxlJobSpringExecutor executor = new XxlJobSpringExecutor();
         executor.setAdminAddresses(adminAddresses);
         executor.setAppname(appName);
+        executor.setAccessToken(accessToken);
         executor.setPort(9998);
         log.info("[XXL-JOB] 执行器注册: appName={}, adminUrl={}", appName, adminAddresses);
         return executor;

@@ -8,6 +8,7 @@ import com.payment.platform.common.result.ApiResult;
 import com.payment.platform.gateway.service.PayService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -44,9 +45,23 @@ public class PayController {
             @Valid @RequestBody PayRequest request,
             @RequestHeader(value = "X-Signature", required = false) String signature,
             @RequestHeader(value = "X-Timestamp", required = false) String timestamp,
-            @RequestHeader(value = "X-Nonce", required = false) String nonce) {
-        PayResponse response = payService.createPay(request, signature, timestamp, nonce);
+            @RequestHeader(value = "X-Nonce", required = false) String nonce,
+            HttpServletRequest httpRequest) {
+        String clientIp = getClientIp(httpRequest);
+        PayResponse response = payService.createPay(request, signature, timestamp, nonce, clientIp);
         return ApiResult.success(response);
+    }
+
+    /** 从请求中提取客户端真实 IP。 */
+    private String getClientIp(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty()) {
+            ip = request.getHeader("X-Real-IP");
+        }
+        if (ip == null || ip.isEmpty()) {
+            ip = request.getRemoteAddr();
+        }
+        return ip != null ? ip.split(",")[0].trim() : "unknown";
     }
 
     /**

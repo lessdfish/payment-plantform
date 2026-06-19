@@ -66,7 +66,7 @@ public class PayServiceImpl implements PayService {
      */
     @Override
     public PayResponse createPay(PayRequest request, String signature,
-                                  String timestamp, String nonce) {
+                                  String timestamp, String nonce, String clientIp) {
         Long merchantId = request.getMerchantId();
         String outTradeNo = request.getOutTradeNo();
 
@@ -81,7 +81,7 @@ public class PayServiceImpl implements PayService {
         signatureService.verify(request, signature, timestamp, nonce, merchantId);
 
         // 3. 风控检查
-        RiskCheckResult riskResult = riskService.check(request);
+        RiskCheckResult riskResult = riskService.check(request, clientIp);
         if (!riskResult.isPassed()) {
             log.warn("[PAY] 风控拦截: merchantId={}, reason={}", merchantId, riskResult.getRejectReason());
             throw new BalanceInsufficientException(/* Phase 4 用独立异常 */

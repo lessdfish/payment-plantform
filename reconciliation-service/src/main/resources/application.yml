@@ -30,5 +30,6 @@ xxl:
   job:
     admin:
       addresses: http://localhost:8087/xxl-job-admin
+    access-token: default_token
     executor:
       appname: reconciliation-service

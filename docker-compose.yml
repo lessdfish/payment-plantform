@@ -28,6 +28,7 @@ services:
       MYSQL_ROOT_PASSWORD: root123
     volumes:
       - ./sql/init-ds0.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./sql/init-xxl-job.sql:/docker-entrypoint-initdb.d/02-xxl-job.sql
     command: --default-authentication-plugin=mysql_native_password
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123"]

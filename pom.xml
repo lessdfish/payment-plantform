@@ -162,10 +162,20 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Spring Cloud Bootstrap 支持（Spring Boot 3 需要此依赖才能读取 bootstrap.yml） -->
+        <!-- Spring Cloud Bootstrap 支持 -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-bootstrap</artifactId>
+        </dependency>
+
+        <!-- Prometheus 指标采集（所有服务默认接入） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
     </dependencies>
 

@@ -5,44 +5,73 @@ import com.payment.platform.gateway.dto.RiskCheckResult;
 import com.payment.platform.gateway.service.RiskService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.util.concurrent.TimeUnit;
 
 /**
- * 风控服务实现。
- * <p>Phase 1 只做基础检查（单笔限额），Phase 4 扩展 IP 频控、日累计限额、黑名单等。</p>
+ * 风控服务实现 — 四道防线。
+ * <p>Phase 4 扩展：IP 频控 + 日累计限额 + 黑名单 + 单笔限额。</p>
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class RiskServiceImpl implements RiskService {
 
-    /** 默认单笔最大金额（元） */
     private static final BigDecimal MAX_SINGLE_AMOUNT = new BigDecimal("50000.00");
+    private static final BigDecimal MAX_DAILY_AMOUNT = new BigDecimal("1000000.00");  // 日累计 100 万
+    private static final int IP_MAX_QPS = 50;           // 单 IP 每秒最多 50 次
+    private static final int IP_WINDOW_SECONDS = 1;
 
-    /**
-     * 风控检查。
-     * <p>Phase 1 检查项：单笔金额上限（5 万元）。</p>
-     */
+    private final RedisTemplate<String, Object> redisTemplate;
+
     @Override
-    public RiskCheckResult check(PayRequest request) {
-        // 检查单笔金额上限
-        if (request.getAmount().compareTo(MAX_SINGLE_AMOUNT) > 0) {
-            log.warn("[RISK] 单笔金额超限: merchantId={}, amount={}, max={}",
-                    request.getMerchantId(), request.getAmount(), MAX_SINGLE_AMOUNT);
-            return RiskCheckResult.builder()
-                    .passed(false)
-                    .rejectReason("单笔交易金额超过上限 " + MAX_SINGLE_AMOUNT + " 元")
-                    .build();
+    public RiskCheckResult check(PayRequest request, String clientIp) {
+        Long merchantId = request.getMerchantId();
+
+        // 1. 黑名单检查
+        Boolean blacklisted = redisTemplate.opsForSet().isMember("blacklist:merchant", merchantId.toString());
+        if (Boolean.TRUE.equals(blacklisted)) {
+            log.warn("[RISK] 商户在黑名单中: merchantId={}", merchantId);
+            return RiskCheckResult.builder().passed(false).rejectReason("商户已被风控拦截").build();
         }
 
-        // 金额必须为正数（DTO 层已有 @DecimalMin 校验，此处为二次确认）
+        // 2. IP 频控（滑动窗口 + Redis）
+        String ipKey = "rate:ip:" + clientIp;
+        Long ipCount = redisTemplate.opsForValue().increment(ipKey);
+        if (ipCount != null && ipCount == 1) {
+            redisTemplate.expire(ipKey, IP_WINDOW_SECONDS, TimeUnit.SECONDS);
+        }
+        if (ipCount != null && ipCount > IP_MAX_QPS) {
+            log.warn("[RISK] IP 频控拦截: ip={}, count={}", clientIp, ipCount);
+            return RiskCheckResult.builder().passed(false).rejectReason("请求过于频繁，请稍后重试").build();
+        }
+
+        // 3. 单笔限额
+        if (request.getAmount().compareTo(MAX_SINGLE_AMOUNT) > 0) {
+            return RiskCheckResult.builder().passed(false)
+                    .rejectReason("单笔交易金额超过上限 " + MAX_SINGLE_AMOUNT + " 元").build();
+        }
+
+        // 4. 日累计限额
+        String dailyKey = "daily:amount:" + merchantId + ":" + LocalDate.now();
+        Long dailyTotal = redisTemplate.opsForValue().increment(dailyKey,
+                request.getAmount().longValue());
+        if (dailyTotal != null && dailyTotal == request.getAmount().longValue()) {
+            redisTemplate.expire(dailyKey, Duration.ofDays(1));
+        }
+        if (dailyTotal != null && dailyTotal > MAX_DAILY_AMOUNT.longValue()) {
+            log.warn("[RISK] 日累计超限: merchantId={}, dailyTotal={}", merchantId, dailyTotal);
+            return RiskCheckResult.builder().passed(false)
+                    .rejectReason("超过日累计交易限额").build();
+        }
+
         if (request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            return RiskCheckResult.builder()
-                    .passed(false)
-                    .rejectReason("交易金额必须大于 0")
-                    .build();
+            return RiskCheckResult.builder().passed(false).rejectReason("交易金额必须大于 0").build();
         }
 
         return RiskCheckResult.builder().passed(true).build();
