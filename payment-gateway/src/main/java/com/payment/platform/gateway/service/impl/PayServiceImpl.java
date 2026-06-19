@@ -22,6 +22,7 @@ import com.payment.platform.gateway.service.SignatureService;
 import com.payment.platform.common.dto.request.ChannelPayRequest;
 import com.payment.platform.common.dto.response.ChannelPayResponse;
 import com.payment.platform.common.dto.response.ChannelQueryResponse;
+import com.payment.platform.common.dto.response.TryResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -160,20 +161,44 @@ public class PayServiceImpl implements PayService {
     }
 
     /**
-     * 渠道返回 SUCCESS — Phase 1 直接成功，Phase 2 会加入 TCC 扣款。
+     * 渠道返回 SUCCESS — TCC 扣款 + MQ 通知。
      */
     private PayResponse handleSuccess(PayRequest request,
                                        ChannelPayResponse channelResponse,
                                        RouteResult route) {
-        log.info("[PAY] 支付成功: outTradeNo={}, channelOrderNo={}, amount={}",
-                request.getOutTradeNo(), channelResponse.getChannelOrderNo(), request.getAmount());
+        log.info("[PAY] 支付成功，开始TCC扣款: outTradeNo={}, amount={}",
+                request.getOutTradeNo(), request.getAmount());
 
-        // Phase 2 在此处加入 TCC Try + Confirm
-        // accountClient.tryFreeze(...)
-        // accountClient.confirm(...)
+        TryResponse tryResult = null;
+        try {
+            // TCC Try：冻结余额
+            tryResult = accountClient.tryFreeze(request.getMerchantId(),
+                    request.getAmount(), request.getOutTradeNo());
 
-        // 创建订单（Phase 2 完善为 MQ 异步）
-        orderClient.createOrder(request.getOutTradeNo(), request.getMerchantId(), request.getAmount());
+            // TCC Confirm：确认扣款 + 生成复式流水
+            accountClient.confirm(tryResult.getTccId());
+
+            // 发送 RocketMQ 支付成功事件（order-service + notification-service 消费）
+            orderClient.sendPaySuccessEvent(request.getOutTradeNo(),
+                    request.getMerchantId(), request.getAmount(),
+                    channelResponse.getChannelOrderNo());
+
+            log.info("[PAY] TCC扣款完成: outTradeNo={}, tccId={}",
+                    request.getOutTradeNo(), tryResult.getTccId());
+
+        } catch (Exception e) {
+            // TCC 异常补偿：如果 Confirm 失败，执行 Cancel 释放冻结
+            log.error("[PAY] TCC扣款异常，执行补偿: outTradeNo={}", request.getOutTradeNo(), e);
+            if (tryResult != null) {
+                try {
+                    accountClient.cancel(tryResult.getTccId());
+                    log.info("[PAY] TCC补偿完成: tccId={}", tryResult.getTccId());
+                } catch (Exception cancelEx) {
+                    log.error("[PAY] TCC补偿失败，需人工处理: tccId={}", tryResult.getTccId(), cancelEx);
+                }
+            }
+            throw new RuntimeException("支付处理失败", e);
+        }
 
         return PayResponse.builder()
                 .outTradeNo(request.getOutTradeNo())
