@@ -20,27 +20,35 @@ public class ShardingConfig {
                   ds0:
                     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
                     driverClassName: com.mysql.cj.jdbc.Driver
-                    jdbcUrl: jdbc:mysql://localhost:3306/payment_account_0?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+                    jdbcUrl: jdbc:mysql://localhost:13306/payment_account_0?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
                     username: root
                     password: root123
+                    maximumPoolSize: 30
+                    minimumIdle: 5
                   ds1:
                     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
                     driverClassName: com.mysql.cj.jdbc.Driver
                     jdbcUrl: jdbc:mysql://localhost:3307/payment_account_0?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
                     username: root
                     password: root123
+                    maximumPoolSize: 30
+                    minimumIdle: 5
                   ds2:
                     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
                     driverClassName: com.mysql.cj.jdbc.Driver
                     jdbcUrl: jdbc:mysql://localhost:3308/payment_account_0?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
                     username: root
                     password: root123
+                    maximumPoolSize: 30
+                    minimumIdle: 5
                   ds3:
                     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
                     driverClassName: com.mysql.cj.jdbc.Driver
                     jdbcUrl: jdbc:mysql://localhost:3309/payment_account_0?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
                     username: root
                     password: root123
+                    maximumPoolSize: 30
+                    minimumIdle: 5
 
                 rules:
                 - !SHARDING

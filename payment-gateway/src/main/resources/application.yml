@@ -1,10 +1,16 @@
 # 支付网关 — 本地开发配置
 server:
   port: 8080
+  tomcat:
+    threads:
+      max: 1000
 
 spring:
   application:
     name: payment-gateway
+  threads:
+    virtual:
+      enabled: true
   cloud:
     nacos:
       discovery:
@@ -21,8 +27,13 @@ rocketmq:
   name-server: localhost:9876
   producer:
     group: payment-gateway-producer
+    send-message-timeout: 30000
 
 management:
+  prometheus:
+    metrics:
+      export:
+        enabled: true
   endpoints:
     web:
       exposure:
@@ -30,3 +41,16 @@ management:
   endpoint:
     prometheus:
       enabled: true
+
+# ==================== 压测开关 ====================
+# 日常开发请保持 false（默认），执行 JMeter 压测时改为 true
+pressure:
+  enabled: false
+
+# 支付接口默认采用可靠异步受理：验签/风控/幂等/入队完成后返回 PROCESSING，
+# 渠道与账务结算由 pay-process 消费者完成。
+payment:
+  async:
+    enabled: true
+  worker:
+    enabled: true

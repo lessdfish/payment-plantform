@@ -7,6 +7,13 @@ package com.payment.platform.gateway.service;
 public interface IdempotencyService {
 
     /**
+     * 原子占用幂等键。
+     *
+     * @return 占用成功返回 null；已被占用时返回已有结果
+     */
+    String reserve(Long merchantId, String outTradeNo, String processingJson);
+
+    /**
      * 检查是否已处理过此订单号。
      * <p>使用 Redis 存储已处理的订单号，TTL 72 小时。</p>
      *
@@ -24,4 +31,7 @@ public interface IdempotencyService {
      * @param resultJson 处理结果（JSON）
      */
     void save(Long merchantId, String outTradeNo, String resultJson);
+
+    /** 处理失败时释放短期占位 */
+    void release(Long merchantId, String outTradeNo);
 }

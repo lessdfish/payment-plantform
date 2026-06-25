@@ -4,12 +4,15 @@ server:
 spring:
   application:
     name: notification-service
+  threads:
+    virtual:
+      enabled: true
   cloud:
     nacos:
       discovery:
         server-addr: localhost:8848
   datasource:
-    url: jdbc:mysql://localhost:3306/payment_merchant?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3308/payment_merchant?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: root123
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -17,6 +20,29 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: false
+  data:
+    redis:
+      host: localhost
+      port: 16379
 
 rocketmq:
   name-server: localhost:9876
+  producer:
+    group: notification-service-producer
+
+notification:
+  retry:
+    delays-ms: 60000,300000,900000,1800000,3600000
+
+management:
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    prometheus:
+      enabled: true

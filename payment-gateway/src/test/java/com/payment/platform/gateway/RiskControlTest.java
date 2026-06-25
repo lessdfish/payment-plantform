@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payment.platform.common.dto.request.PayRequest;
 import com.payment.platform.common.util.RsaSignUtil;
 import org.junit.jupiter.api.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestClient;
 
@@ -19,7 +20,9 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class RiskControlTest {
 
-    private static final RestClient CLIENT = RestClient.create();
+    private static final RestClient CLIENT = RestClient.builder()
+            .requestFactory(new SimpleClientHttpRequestFactory())
+            .build();
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String GATEWAY_URL = "http://localhost:8080/api/v1/pay";
     private static final String ACCOUNT_URL = "http://localhost:8081/api/v1/account";

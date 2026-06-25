@@ -8,6 +8,7 @@ import com.payment.platform.common.dto.event.BillDTO;
 import com.payment.platform.simulator.entity.ChannelOrder;
 import com.payment.platform.simulator.entity.SimulatorConfig;
 import com.payment.platform.simulator.repository.ChannelOrderRepository;
+import com.payment.platform.simulator.repository.DirectChannelOrderStore;
 import com.payment.platform.simulator.repository.SimulatorConfigRepository;
 import com.payment.platform.simulator.service.SimulatorService;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -34,16 +37,18 @@ import java.util.stream.Collectors;
 public class SimulatorServiceImpl implements SimulatorService {
 
     private final ChannelOrderRepository channelOrderRepository;
+    private final DirectChannelOrderStore channelOrderStore;
     private final SimulatorConfigRepository simulatorConfigRepository;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private final ConcurrentMap<String, SimulatorConfig> configCache =
+            new ConcurrentHashMap<>();
 
     /**
      * 模拟发起支付。
      * <p>根据配置的成功率和 UNKNOWN 率随机决定返回什么。同时模拟配置的延迟时长。</p>
      */
     @Override
-    @Transactional
     public ChannelPayResponse pay(ChannelPayRequest request) {
         // 读取当前生效的模拟器配置
         SimulatorConfig config = getActiveConfig(request.getChannelType());
@@ -89,7 +94,21 @@ public class SimulatorServiceImpl implements SimulatorService {
                 .channelType(request.getChannelType())
                 .createTime(LocalDateTime.now())
                 .build();
-        channelOrderRepository.save(order);
+        if (!channelOrderStore.insert(order)) {
+            ChannelOrder existing =
+                    channelOrderStore.findByOutTradeNo(request.getOutTradeNo());
+            if (existing == null) {
+                throw new IllegalStateException(
+                        "渠道订单幂等冲突后未找到记录: " + request.getOutTradeNo());
+            }
+            return ChannelPayResponse.builder()
+                    .channelOrderNo(existing.getChannelOrderNo())
+                    .outTradeNo(existing.getOutTradeNo())
+                    .amount(existing.getAmount())
+                    .status(existing.getStatus())
+                    .message("渠道幂等命中")
+                    .build();
+        }
 
         log.info("[SIMULATOR] 支付请求: outTradeNo={}, channelOrderNo={}, roll={}, status={}",
                 request.getOutTradeNo(), channelOrderNo,
@@ -109,8 +128,10 @@ public class SimulatorServiceImpl implements SimulatorService {
      * <p>从 ChannelOrder 表查询支付请求的最终状态。</p>
      */
     @Override
+    @Transactional
     public ChannelQueryResponse query(String outTradeNo) {
-        Optional<ChannelOrder> orderOpt = channelOrderRepository.findByOutTradeNo(outTradeNo);
+        Optional<ChannelOrder> orderOpt = channelOrderRepository
+                .findFirstByOutTradeNoOrderByCreateTimeDesc(outTradeNo);
 
         if (orderOpt.isEmpty()) {
             return ChannelQueryResponse.builder()
@@ -121,6 +142,11 @@ public class SimulatorServiceImpl implements SimulatorService {
         }
 
         ChannelOrder order = orderOpt.get();
+        if ("UNKNOWN".equals(order.getStatus())
+                && order.getCreateTime().plusSeconds(1).isBefore(LocalDateTime.now())) {
+            order.setStatus("SUCCESS");
+            channelOrderRepository.save(order);
+        }
         return ChannelQueryResponse.builder()
                 .channelOrderNo(order.getChannelOrderNo())
                 .outTradeNo(order.getOutTradeNo())
@@ -163,7 +189,9 @@ public class SimulatorServiceImpl implements SimulatorService {
     @Transactional
     public SimulatorConfig updateConfig(SimulatorConfig config) {
         config.setUpdateTime(LocalDateTime.now());
-        return simulatorConfigRepository.save(config);
+        SimulatorConfig saved = simulatorConfigRepository.save(config);
+        configCache.clear();
+        return saved;
     }
 
     /**
@@ -179,6 +207,12 @@ public class SimulatorServiceImpl implements SimulatorService {
      * <p>兜底配置值：成功率 80%，UNKNOWN 率 10%，延迟 50ms。</p>
      */
     private SimulatorConfig getActiveConfig(String channelType) {
+        return configCache.computeIfAbsent(
+                channelType == null ? "DEFAULT" : channelType,
+                this::loadActiveConfig);
+    }
+
+    private SimulatorConfig loadActiveConfig(String channelType) {
         // 先查指定渠道的配置
         Optional<SimulatorConfig> configOpt = simulatorConfigRepository
                 .findByChannelTypeAndStatus(channelType, "ACTIVE");

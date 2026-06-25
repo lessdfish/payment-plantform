@@ -23,13 +23,15 @@ services:
     image: mysql:8.0.33
     container_name: payment-mysql-ds0
     ports:
-      - "3306:3306"
+      - "13306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root123
     volumes:
       - ./sql/init-ds0.sql:/docker-entrypoint-initdb.d/01-init.sql
       - ./sql/init-xxl-job.sql:/docker-entrypoint-initdb.d/02-xxl-job.sql
-    command: --default-authentication-plugin=mysql_native_password
+    # 单机压测配置：保留 ROW binlog/Canal，但将日志刷盘批量化。
+    # 生产金融环境应恢复 innodb_flush_log_at_trx_commit=1、sync_binlog=1。
+    command: --default-authentication-plugin=mysql_native_password --log-bin=mysql-bin --binlog-format=ROW --server-id=1 --innodb-flush-log-at-trx-commit=2 --sync-binlog=0 --max-connections=500 --innodb-buffer-pool-size=512M
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123"]
       interval: 10s
@@ -45,7 +47,12 @@ services:
       MYSQL_ROOT_PASSWORD: root123
     volumes:
       - ./sql/init-ds1.sql:/docker-entrypoint-initdb.d/01-init.sql
-    command: --default-authentication-plugin=mysql_native_password
+    command: --default-authentication-plugin=mysql_native_password --log-bin=mysql-bin --binlog-format=ROW --server-id=2 --innodb-flush-log-at-trx-commit=2 --sync-binlog=0 --max-connections=500 --innodb-buffer-pool-size=512M
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   mysql-ds2:
     image: mysql:8.0.33
@@ -56,7 +63,12 @@ services:
       MYSQL_ROOT_PASSWORD: root123
     volumes:
       - ./sql/init-ds2.sql:/docker-entrypoint-initdb.d/01-init.sql
-    command: --default-authentication-plugin=mysql_native_password
+    command: --default-authentication-plugin=mysql_native_password --log-bin=mysql-bin --binlog-format=ROW --server-id=3 --innodb-flush-log-at-trx-commit=2 --sync-binlog=0 --max-connections=500 --innodb-buffer-pool-size=512M
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   mysql-ds3:
     image: mysql:8.0.33
@@ -67,7 +79,12 @@ services:
       MYSQL_ROOT_PASSWORD: root123
     volumes:
       - ./sql/init-ds3.sql:/docker-entrypoint-initdb.d/01-init.sql
-    command: --default-authentication-plugin=mysql_native_password
+    command: --default-authentication-plugin=mysql_native_password --log-bin=mysql-bin --binlog-format=ROW --server-id=4 --innodb-flush-log-at-trx-commit=2 --sync-binlog=0 --max-connections=500 --innodb-buffer-pool-size=512M
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   # ==================== 缓存 ====================
   redis:
@@ -88,6 +105,11 @@ services:
     ports:
       - "9876:9876"
     command: sh mqnamesrv
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/9876'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   rocketmq-broker:
     image: apache/rocketmq:5.2.0
@@ -99,7 +121,21 @@ services:
       - "10909:10909"
     environment:
       NAMESRV_ADDR: rocketmq-namesrv:9876
-    command: sh mqbroker -n rocketmq-namesrv:9876
+      JAVA_OPT_EXT: "-Xms256m -Xmx512m -Xmn256m -XX:-UseContainerSupport"
+    command: >
+      sh -c "echo brokerClusterName=DefaultCluster > /tmp/broker.conf
+      && echo brokerName=broker-a >> /tmp/broker.conf
+      && echo brokerId=0 >> /tmp/broker.conf
+      && echo brokerIP1=127.0.0.1 >> /tmp/broker.conf
+      && echo listenPort=10911 >> /tmp/broker.conf
+      && echo namesrvAddr=rocketmq-namesrv:9876 >> /tmp/broker.conf
+      && echo autoCreateTopicEnable=true >> /tmp/broker.conf
+      && sh /home/rocketmq/rocketmq-5.2.0/bin/mqbroker -c /tmp/broker.conf -n rocketmq-namesrv:9876"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/10911'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   kafka:
     image: bitnamilegacy/kafka:3.7.0-debian-12-r8
@@ -111,37 +147,80 @@ services:
       KAFKA_CFG_PROCESS_ROLES: broker,controller
       KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
       KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: INTERNAL
+    healthcheck:
+      test: ["CMD", "/opt/bitnami/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
 
   # ==================== 定时任务 & 数据同步 ====================
   xxl-job-admin:
     image: xuxueli/xxl-job-admin:2.4.1
     container_name: payment-xxl-job
     ports:
-      - "8087:8080"
+      - "18087:8080"
     environment:
       PARAMS: "--spring.datasource.url=jdbc:mysql://mysql-ds0:3306/xxl_job?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai --spring.datasource.username=root --spring.datasource.password=root123"
     depends_on:
       - mysql-ds0
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
   # Canal Server（监听 MySQL Binlog）
-  # 注意：需要先在 MySQL 中开启 Binlog（在 my.cnf 中设置 log-bin=mysql-bin, binlog-format=ROW, server-id=1）
-  # canal-server:
-  #   image: canal/canal-server:v1.1.7
-  #   container_name: payment-canal
-  #   ports:
-  #     - "11111:11111"
-  #   depends_on:
-  #     - mysql-ds0
+  canal-server:
+    image: canal/canal-server:v1.1.7
+    container_name: payment-canal
+    ports:
+      - "11111:11111"
+    command: >
+      bash -c "sed -i 's/canal.serverMode = tcp/canal.serverMode = kafka/' /home/admin/canal-server/conf/canal.properties
+      && sed -i 's/canal.auto.scan = true/canal.auto.scan = false/' /home/admin/canal-server/conf/canal.properties
+      && sed -i 's/canal.destinations = example/canal.destinations = ds0,ds1,ds2,ds3/' /home/admin/canal-server/conf/canal.properties
+      && sed -i 's#kafka.bootstrap.servers = 127.0.0.1:9092#kafka.bootstrap.servers = kafka:29092#' /home/admin/canal-server/conf/canal.properties
+      && sed -i 's/-Xms2g -Xmx3g/-Xms256m -Xmx768m/' /home/admin/canal-server/bin/startup.sh
+      && for i in 0 1 2 3; do cp -r /home/admin/canal-server/conf/example /home/admin/canal-server/conf/ds$${i}
+      && sed -i \"s#canal.instance.master.address=127.0.0.1:3306#canal.instance.master.address=mysql-ds$${i}:3306#\" /home/admin/canal-server/conf/ds$${i}/instance.properties
+      && sed -i 's/canal.instance.tsdb.enable=true/canal.instance.tsdb.enable=false/' /home/admin/canal-server/conf/ds$${i}/instance.properties
+      && sed -i 's#canal.instance.filter.regex=.*\\\\..*#canal.instance.filter.regex=payment_account_0\\\\.journal_entry_.*#' /home/admin/canal-server/conf/ds$${i}/instance.properties
+      && sed -i 's/canal.mq.topic=example/canal.mq.topic=txn-log/' /home/admin/canal-server/conf/ds$${i}/instance.properties; done
+      && for i in 0 1 2 3; do sed -i \"s/canal.mq.partition=0/canal.mq.partition=$${i}/\" /home/admin/canal-server/conf/ds$${i}/instance.properties; done
+      && rm -rf /home/admin/canal-server/conf/example
+      && /home/admin/app.sh"
+    depends_on:
+      mysql-ds0:
+        condition: service_healthy
+      mysql-ds1:
+        condition: service_healthy
+      mysql-ds2:
+        condition: service_healthy
+      mysql-ds3:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /home/admin/canal-server/bin/canal.pid && kill -0 $(cat /home/admin/canal-server/bin/canal.pid)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
   # ==================== 限流熔断 ====================
   sentinel-dashboard:
     image: bladex/sentinel-dashboard:1.8.7
     container_name: payment-sentinel
     ports:
-      - "8858:8080"
+      - "8858:8858"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8858"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   # ==================== 可观测性 ====================
   prometheus:
@@ -151,6 +230,11 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   loki:
     image: grafana/loki:2.9.10
@@ -158,12 +242,22 @@ services:
     ports:
       - "3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   promtail:
     image: grafana/promtail:2.9.10
     container_name: payment-promtail
     volumes:
       - ./promtail-config.yml:/etc/promtail/config.yml
+    healthcheck:
+      test: ["CMD", "/usr/bin/promtail", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   grafana:
     image: grafana/grafana:10.4.5
@@ -173,3 +267,11 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

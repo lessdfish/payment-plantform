@@ -4,7 +4,9 @@ import com.payment.platform.common.dto.request.ChannelPayRequest;
 import com.payment.platform.common.dto.response.ChannelPayResponse;
 import com.payment.platform.common.dto.response.ChannelQueryResponse;
 import com.payment.platform.common.result.ApiResult;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -15,11 +17,13 @@ import org.springframework.web.client.RestClient;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class ChannelSimulatorClient {
 
-    private static final String BASE_URL = "http://localhost:8086";
+    @Value("${services.channel-simulator.base-url:http://localhost:8086}")
+    private String baseUrl;
 
-    private final RestClient client = RestClient.create();
+    private final RestClient client;
 
     private static final ParameterizedTypeReference<ApiResult<ChannelPayResponse>> PAY_TYPE =
             new ParameterizedTypeReference<>() {};
@@ -31,7 +35,7 @@ public class ChannelSimulatorClient {
      */
     public ChannelPayResponse pay(ChannelPayRequest request) {
         ApiResult<ChannelPayResponse> result = client.post()
-                .uri(BASE_URL + "/api/v1/simulator/pay")
+                .uri(baseUrl + "/api/v1/simulator/pay")
                 .body(request)
                 .retrieve()
                 .body(PAY_TYPE);
@@ -48,7 +52,7 @@ public class ChannelSimulatorClient {
      */
     public ChannelQueryResponse query(String outTradeNo) {
         ApiResult<ChannelQueryResponse> result = client.get()
-                .uri(BASE_URL + "/api/v1/simulator/query?outTradeNo=" + outTradeNo)
+                .uri(baseUrl + "/api/v1/simulator/query?outTradeNo=" + outTradeNo)
                 .retrieve()
                 .body(QUERY_TYPE);
 

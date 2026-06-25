@@ -5,6 +5,9 @@ server:
 spring:
   application:
     name: order-service
+  threads:
+    virtual:
+      enabled: true
   cloud:
     nacos:
       discovery:
@@ -13,10 +16,29 @@ spring:
     hibernate:
       ddl-auto: none
     show-sql: false
+  data:
+    redis:
+      host: localhost
+      port: 16379
 
 rocketmq:
   name-server: localhost:9876
+  producer:
+    group: order-service-producer
 
 snowflake:
   worker-id: 3
   data-center-id: 1
+
+management:
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    prometheus:
+      enabled: true

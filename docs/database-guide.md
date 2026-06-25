@@ -28,15 +28,7 @@
          └── xxl_job            │                      │                      │
 ```
 
-**分库规则：** 哪个 merchant_id 的数据落在哪个库，由 `merchant_id % 4` 决定（0 → ds0, 1 → ds1, 2 → ds2, 3 → ds3）。
 
-**分表规则：** 同一个库里，具体落在哪张表，由 `merchant_id % 8` 决定（0 → _0, 1 → _1, ... 7 → _7）。
-
-**例：** merchant_id = 10003
-- 分库：10003 % 4 = 3 → MySQL ds3
-- 分表：10003 % 8 = 3 → account_3 / transaction_3 / journal_entry_3
-
-**非分片库：** payment_merchant 和 payment_simulator 只存在 ds0，因为数据量小不需要拆分。
 
 ---
 

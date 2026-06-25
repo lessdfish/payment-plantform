@@ -36,9 +36,18 @@ public class SignatureServiceImpl implements SignatureService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
 
+    /** 压测模式开关（默认 false，不影响生产）。true 时跳过所有验签步骤。 */
+    @org.springframework.beans.factory.annotation.Value("${pressure.enabled:false}")
+    private boolean pressureEnabled;
+
     @Override
     public boolean verify(PayRequest request, String signature, String timestamp,
                           String nonce, Long merchantId) {
+        // 压测模式：跳过所有验签
+        if (pressureEnabled) {
+            return true;
+        }
+
         // 1. 获取商户公钥
         String publicKey = merchantClient.getPublicKey(merchantId);
         if (publicKey == null) {

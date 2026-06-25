@@ -3,6 +3,10 @@
 -- 端口：3306
 -- ============================================================
 
+CREATE USER IF NOT EXISTS 'canal'@'%' IDENTIFIED BY 'canal';
+GRANT SELECT, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'canal'@'%';
+FLUSH PRIVILEGES;
+
 -- XXL-JOB 调度中心数据库
 CREATE DATABASE IF NOT EXISTS xxl_job DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 
@@ -41,8 +45,9 @@ CREATE TABLE IF NOT EXISTS transaction_0 (
     status VARCHAR(16) DEFAULT NULL COMMENT '交易状态',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     INDEX idx_merchant_id (merchant_id),
-    INDEX idx_txn_id (txn_id),
-    INDEX idx_out_trade_no (out_trade_no)
+    UNIQUE KEY uk_txn_id (txn_id),
+    INDEX idx_out_trade_no (out_trade_no),
+    UNIQUE KEY uk_merchant_trade_type (merchant_id, out_trade_no, txn_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交易记录表_分片0';
 
 CREATE TABLE IF NOT EXISTS transaction_1 LIKE transaction_0;
@@ -64,6 +69,7 @@ CREATE TABLE IF NOT EXISTS journal_entry_0 (
     txn_type VARCHAR(32) NOT NULL COMMENT '交易类型',
     txn_time DATETIME NOT NULL COMMENT '交易时间',
     merchant_id BIGINT NOT NULL COMMENT '商户ID（分片键）',
+    out_trade_no VARCHAR(64) DEFAULT NULL COMMENT '商户订单号（对账键）',
     INDEX idx_merchant_id (merchant_id),
     INDEX idx_txn_id (txn_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='复式记账流水表_分片0';
@@ -81,7 +87,7 @@ CREATE DATABASE IF NOT EXISTS payment_order_0 DEFAULT CHARACTER SET utf8mb4 COLL
 USE payment_order_0;
 
 -- 订单表
-CREATE TABLE IF NOT EXISTS `order` (
+CREATE TABLE IF NOT EXISTS payment_order (
     id BIGINT PRIMARY KEY COMMENT '订单ID（Snowflake）',
     order_no VARCHAR(32) NOT NULL COMMENT '内部订单号',
     out_trade_no VARCHAR(64) NOT NULL COMMENT '商户订单号',
@@ -89,11 +95,13 @@ CREATE TABLE IF NOT EXISTS `order` (
     amount DECIMAL(18,2) NOT NULL COMMENT '订单金额',
     status VARCHAR(16) NOT NULL DEFAULT 'CREATED' COMMENT '订单状态',
     channel_order_no VARCHAR(64) DEFAULT NULL COMMENT '渠道订单号',
+    notify_url VARCHAR(512) DEFAULT NULL COMMENT '商户回调地址',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     INDEX idx_merchant_id (merchant_id),
     INDEX idx_order_no (order_no),
-    INDEX idx_out_trade_no (out_trade_no)
+    INDEX idx_out_trade_no (out_trade_no),
+    UNIQUE KEY uk_merchant_out_trade (merchant_id, out_trade_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单表';
 
 -- 退款单表
@@ -108,7 +116,8 @@ CREATE TABLE IF NOT EXISTS refund_order (
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     INDEX idx_merchant_id (merchant_id),
-    INDEX idx_refund_no (refund_no)
+    INDEX idx_refund_no (refund_no),
+    UNIQUE KEY uk_merchant_out_refund (merchant_id, out_refund_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款单表';
 
 -- 商户服务数据库
@@ -166,7 +175,7 @@ CREATE TABLE IF NOT EXISTS channel_order (
     channel_type VARCHAR(32) DEFAULT 'MOCK' COMMENT '渠道类型',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_channel_order_no (channel_order_no),
-    INDEX idx_out_trade_no (out_trade_no)
+    UNIQUE KEY uk_out_trade_no (out_trade_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='模拟渠道订单表';
 
 -- 模拟器配置表

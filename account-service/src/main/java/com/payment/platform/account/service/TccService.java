@@ -21,6 +21,11 @@ public interface TccService {
     TryResponse tryFreeze(TryRequest request);
 
     /**
+     * 支付热路径：在账户服务内连续执行 Try 和 Confirm。
+     */
+    TryResponse executePayment(TryRequest request);
+
+    /**
      * Confirm：实扣冻结金额 + 生成复式记账流水。
      * <p>必须幂等：同一 tccId 重复调用直接返回成功。</p>
      */

@@ -31,4 +31,7 @@ public class RefundSuccessEvent implements Serializable {
 
     /** 退款金额（元） */
     private BigDecimal refundAmount;
+
+    /** 商户退款结果回调地址 */
+    private String notifyUrl;
 }

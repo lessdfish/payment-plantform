@@ -2,8 +2,8 @@ package com.payment.platform.account.service.impl;
 
 import cn.hutool.core.util.IdUtil;
 import com.payment.platform.account.entity.JournalEntry;
-import com.payment.platform.account.repository.JournalEntryRepository;
 import com.payment.platform.account.service.JournalService;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class JournalServiceImpl implements JournalService {
 
-    private final JournalEntryRepository journalEntryRepository;
+    private final EntityManager entityManager;
 
     @Override
     public void record(String txnId, Long debitAccountId, Long creditAccountId,
@@ -51,7 +51,7 @@ public class JournalServiceImpl implements JournalService {
                 .merchantId(merchantId)
                 .build();
 
-        journalEntryRepository.save(debit);
-        journalEntryRepository.save(credit);
+        entityManager.persist(debit);
+        entityManager.persist(credit);
     }
 }

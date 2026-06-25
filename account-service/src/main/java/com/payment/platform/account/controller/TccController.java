@@ -29,6 +29,12 @@ public class TccController {
         return ApiResult.success(tccService.tryFreeze(request));
     }
 
+    /** 支付热路径：减少一次网关到账户服务的 HTTP 往返。 */
+    @PostMapping("/execute")
+    public ApiResult<TryResponse> execute(@Valid @RequestBody TryRequest request) {
+        return ApiResult.success(tccService.executePayment(request));
+    }
+
     /** TCC Confirm：确认扣款 */
     @PostMapping("/confirm")
     public ApiResult<Void> confirm(@Valid @RequestBody ConfirmRequest request) {

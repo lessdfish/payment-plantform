@@ -44,4 +44,7 @@ public class TxnLogEvent implements Serializable {
 
     /** 商户 ID（分片键） */
     private Long merchantId;
+
+    /** 商户订单号（对账键） */
+    private String outTradeNo;
 }

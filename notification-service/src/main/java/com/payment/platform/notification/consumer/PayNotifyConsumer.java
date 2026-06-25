@@ -26,8 +26,8 @@ public class PayNotifyConsumer implements RocketMQListener<PaySuccessEvent> {
         log.info("[NOTIFY-CONSUMER] 收到支付成功事件: outTradeNo={}", event.getOutTradeNo());
         try {
             String body = objectMapper.writeValueAsString(event);
-            String notifyUrl = "http://localhost:8080/api/v1/callback/channel";
-            notifyService.sendCallback(event.getOutTradeNo(), event.getMerchantId(), notifyUrl, body);
+            notifyService.sendCallback(event.getOutTradeNo(), event.getMerchantId(),
+                    event.getNotifyUrl(), body);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             log.error("[NOTIFY-CONSUMER] JSON序列化失败: outTradeNo={}", event.getOutTradeNo(), e);
             throw new RuntimeException(e);

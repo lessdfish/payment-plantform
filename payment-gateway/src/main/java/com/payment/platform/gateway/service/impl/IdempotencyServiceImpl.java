@@ -22,9 +22,22 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     /** 幂等记录过期时间（72 小时） */
     private static final Duration TTL = Duration.ofHours(72);
+    private static final Duration RESERVATION_TTL = TTL;
 
     /** Redis key 前缀 */
     private static final String KEY_PREFIX = "idem:";
+
+    @Override
+    public String reserve(Long merchantId, String outTradeNo, String processingJson) {
+        String key = buildKey(merchantId, outTradeNo);
+        Boolean acquired = redisTemplate.opsForValue()
+                .setIfAbsent(key, processingJson, RESERVATION_TTL);
+        if (Boolean.TRUE.equals(acquired)) {
+            return null;
+        }
+        Object existing = redisTemplate.opsForValue().get(key);
+        return existing == null ? processingJson : existing.toString();
+    }
 
     /**
      * 检查订单号是否已处理。
@@ -33,7 +46,7 @@ public class IdempotencyServiceImpl implements IdempotencyService {
      */
     @Override
     public String check(Long merchantId, String outTradeNo) {
-        String key = KEY_PREFIX + merchantId + ":" + outTradeNo;
+        String key = buildKey(merchantId, outTradeNo);
         Object value = redisTemplate.opsForValue().get(key);
         if (value != null) {
             log.info("[IDEMPOTENT] 重复请求命中: merchantId={}, outTradeNo={}", merchantId, outTradeNo);
@@ -47,8 +60,17 @@ public class IdempotencyServiceImpl implements IdempotencyService {
      */
     @Override
     public void save(Long merchantId, String outTradeNo, String resultJson) {
-        String key = KEY_PREFIX + merchantId + ":" + outTradeNo;
+        String key = buildKey(merchantId, outTradeNo);
         redisTemplate.opsForValue().set(key, resultJson, TTL);
         log.info("[IDEMPOTENT] 保存幂等记录: merchantId={}, outTradeNo={}", merchantId, outTradeNo);
+    }
+
+    @Override
+    public void release(Long merchantId, String outTradeNo) {
+        redisTemplate.delete(buildKey(merchantId, outTradeNo));
+    }
+
+    private String buildKey(Long merchantId, String outTradeNo) {
+        return KEY_PREFIX + merchantId + ":" + outTradeNo;
     }
 }

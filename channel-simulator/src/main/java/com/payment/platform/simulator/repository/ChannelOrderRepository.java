@@ -22,7 +22,7 @@ public interface ChannelOrderRepository extends JpaRepository<ChannelOrder, Long
     /**
      * 根据商户订单号查询（用于查单接口）。
      */
-    Optional<ChannelOrder> findByOutTradeNo(String outTradeNo);
+    Optional<ChannelOrder> findFirstByOutTradeNoOrderByCreateTimeDesc(String outTradeNo);
 
     /**
      * 按时间范围查询所有完成的订单（用于账单生成）。

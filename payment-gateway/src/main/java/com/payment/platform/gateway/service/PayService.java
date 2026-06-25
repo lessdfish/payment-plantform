@@ -26,6 +26,11 @@ public interface PayService {
                           String timestamp, String nonce, String clientIp);
 
     /**
+     * 处理已可靠入队的支付请求。失败时抛出异常，由 MQ 重投。
+     */
+    void processAccepted(PayRequest request);
+
+    /**
      * 支付查询。
      *
      * @param request 查询请求

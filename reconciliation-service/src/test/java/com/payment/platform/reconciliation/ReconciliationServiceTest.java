@@ -19,7 +19,7 @@ class ReconciliationServiceTest {
     void tc01_xxlJobExecutorRegistered() {
         // 验证服务启动后 XXL-JOB 执行器已注册
         // 通过 Nacos 或日志确认，此处简化验证
-        System.out.println("验收方式：浏览器打开 http://localhost:8087/xxl-job-admin");
+        System.out.println("验收方式：浏览器打开 http://localhost:18087/xxl-job-admin");
         System.out.println("进入「执行器管理」→ 查看 reconciliation-service 是否在线");
         assertTrue(true);
     }

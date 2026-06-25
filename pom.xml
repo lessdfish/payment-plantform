@@ -33,7 +33,7 @@
 
         <!-- 数据库 & 分片 -->
         <mysql-connector.version>8.0.33</mysql-connector.version>
-        <shardingsphere.version>5.4.1</shardingsphere.version>
+        <shardingsphere.version>5.5.1</shardingsphere.version>
 
         <!-- 消息队列 -->
         <rocketmq-spring-boot.version>2.3.0</rocketmq-spring-boot.version>
@@ -50,8 +50,6 @@
         <!-- Canal -->
         <canal.version>1.1.7</canal.version>
 
-        <!-- 可观测性 -->
-        <micrometer.version>1.12.6</micrometer.version>
     </properties>
 
     <!-- ==================== 9 个子模块 ==================== -->
@@ -105,7 +103,7 @@
             <!-- ShardingSphere-JDBC 分库分表 -->
             <dependency>
                 <groupId>org.apache.shardingsphere</groupId>
-                <artifactId>shardingsphere-jdbc-core</artifactId>
+                <artifactId>shardingsphere-jdbc</artifactId>
                 <version>${shardingsphere.version}</version>
             </dependency>
 
@@ -144,12 +142,6 @@
                 <version>${canal.version}</version>
             </dependency>
 
-            <!-- Micrometer Prometheus 指标采集 -->
-            <dependency>
-                <groupId>io.micrometer</groupId>
-                <artifactId>micrometer-registry-prometheus</artifactId>
-                <version>${micrometer.version}</version>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 

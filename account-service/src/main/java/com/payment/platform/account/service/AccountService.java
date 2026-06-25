@@ -18,4 +18,7 @@ public interface AccountService {
      * 商户充值（平台→商户，单边操作不涉及 TCC）。
      */
     void recharge(Long merchantId, BigDecimal amount, String outTradeNo);
+
+    /** 退款入账（平台→商户），按退款单号幂等 */
+    void refund(Long merchantId, BigDecimal amount, String outRefundNo);
 }

@@ -8,4 +8,6 @@ import java.util.Optional;
 @Repository
 public interface NotifyRecordRepository extends JpaRepository<NotifyRecord, Long> {
     Optional<NotifyRecord> findByOutTradeNoAndStatus(String outTradeNo, String status);
+    Optional<NotifyRecord> findFirstByOutTradeNoAndMerchantIdOrderByIdDesc(
+            String outTradeNo, Long merchantId);
 }

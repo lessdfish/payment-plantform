@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpMethod;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
@@ -44,6 +45,7 @@ class PaymentIntegrationTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static final String MERCHANT_URL = "http://localhost:8085/api/v1/merchant";
+    private static final String ACCOUNT_URL = "http://localhost:8081/api/v1/account";
     private static final String GATEWAY_URL = "http://localhost:8080/api/v1/pay";
 
     private static Long merchantId;
@@ -147,12 +149,25 @@ class PaymentIntegrationTest {
     }
 
     /**
-     * 步骤 4：构造签名并发起支付请求。
-     * <p>这是核心验收点——验证完整支付链路：验签 → 风控 → 路由 → 渠道。</p>
+     * 步骤 4：为新商户创建账户并充值。
      */
     @Test
     @Order(4)
-    void step4_createPayment() throws Exception {
+    void step4_rechargeAccount() {
+        CLIENT.post()
+                .uri(ACCOUNT_URL + "/recharge/{merchantId}?amount={amount}&outTradeNo={outTradeNo}",
+                        merchantId, "10000.00", "RECHARGE" + System.currentTimeMillis())
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    /**
+     * 步骤 5：构造签名并发起支付请求。
+     * <p>这是核心验收点——验证完整支付链路：验签 → 风控 → 路由 → 渠道。</p>
+     */
+    @Test
+    @Order(5)
+    void step5_createPayment() throws Exception {
         outTradeNo = "TEST" + System.currentTimeMillis();
 
         // 构造支付请求体
@@ -161,7 +176,7 @@ class PaymentIntegrationTest {
         payRequest.setMerchantId(merchantId);
         payRequest.setAmount(new BigDecimal("99.99"));
         payRequest.setCurrency("CNY");
-        payRequest.setNotifyUrl("https://test.payment.com/callback");
+        payRequest.setNotifyUrl("http://localhost:8080/api/v1/callback/channel");
         payRequest.setSubject("测试商品");
 
         // 构建签名串
@@ -205,24 +220,56 @@ class PaymentIntegrationTest {
         assertNotNull(data, "支付响应为空");
         assertEquals(outTradeNo, data.get("outTradeNo"));
         assertEquals(0, result.get("code"), "支付失败: " + result.get("message"));
+        assertTrue("PROCESSING".equals(data.get("payStatus"))
+                        || "SUCCESS".equals(data.get("payStatus")),
+                "支付应已受理或完成");
+
+        String finalStatus = waitForFinalStatus();
+        assertEquals("SUCCESS", finalStatus, "异步支付应最终成功");
 
         System.out.println("支付状态: " + data.get("payStatus"));
         System.out.println("渠道订单号: " + data.get("channelOrderNo"));
     }
 
+    private String waitForFinalStatus() throws Exception {
+        String requestBody = MAPPER.writeValueAsString(
+                new com.payment.platform.common.dto.request.PayQueryRequest(
+                        outTradeNo, merchantId));
+        for (int i = 0; i < 50; i++) {
+            String response = CLIENT.method(HttpMethod.GET)
+                    .uri(GATEWAY_URL + "/query")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .body(String.class);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = MAPPER.readValue(response, Map.class);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data =
+                    (Map<String, Object>) result.get("data");
+            String status = data == null ? null
+                    : String.valueOf(data.get("payStatus"));
+            if ("SUCCESS".equals(status) || "FAIL".equals(status)) {
+                return status;
+            }
+            Thread.sleep(200);
+        }
+        return "PROCESSING";
+    }
+
     /**
-     * 步骤 5：幂等性验证——重复同一订单号，应返回原结果。
+     * 步骤 6：幂等性验证——重复同一订单号，应返回原结果。
      */
     @Test
-    @Order(5)
-    void step5_verifyIdempotency() throws Exception {
+    @Order(6)
+    void step6_verifyIdempotency() throws Exception {
         // 构造同样的请求
         PayRequest payRequest = new PayRequest();
         payRequest.setOutTradeNo(outTradeNo);
         payRequest.setMerchantId(merchantId);
         payRequest.setAmount(new BigDecimal("99.99"));
         payRequest.setCurrency("CNY");
-        payRequest.setNotifyUrl("https://test.payment.com/callback");
+        payRequest.setNotifyUrl("http://localhost:8080/api/v1/callback/channel");
         payRequest.setSubject("测试商品");
 
         String timestamp = String.valueOf(System.currentTimeMillis() / 1000);

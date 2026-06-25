@@ -190,6 +190,7 @@ services:
 ```
 
 **bootstrap.yml 模板（所有服务通用，仅改 service name 和 port）：**
+
 ```yaml
 spring:
   application:
@@ -269,6 +270,7 @@ public class ApiResult<T> {
 这是一个 `@RestControllerAdvice`，统一拦截所有异常，返回对应的 HTTP 状态码和错误码。
 
 **拦截映射：**
+
 - `SignatureException` → 401 SIGN_INVALID
 - `DuplicateRequestException` → 200 DUPLICATE
 - `BalanceInsufficientException` → 422 BALANCE_INSUFFICIENT

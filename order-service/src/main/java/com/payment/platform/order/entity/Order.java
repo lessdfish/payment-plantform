@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "`order`")
+@Table(name = "payment_order")
 public class Order {
 
     @Id
@@ -43,6 +43,9 @@ public class Order {
 
     @Column(name = "channel_order_no", length = 64)
     private String channelOrderNo;
+
+    @Column(name = "notify_url", length = 512)
+    private String notifyUrl;
 
     @Column(name = "create_time", updatable = false)
     private LocalDateTime createTime;

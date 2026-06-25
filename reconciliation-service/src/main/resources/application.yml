@@ -4,12 +4,15 @@ server:
 spring:
   application:
     name: reconciliation-service
+  threads:
+    virtual:
+      enabled: true
   cloud:
     nacos:
       discovery:
         server-addr: localhost:8848
   datasource:
-    url: jdbc:mysql://localhost:3306/payment_account_0?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3309/payment_account_0?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: root123
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -17,19 +20,36 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: false
+  data:
+    redis:
+      host: localhost
+      port: 16379
   kafka:
     bootstrap-servers: localhost:9092
     consumer:
       group-id: reconciliation-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: com.payment.platform.common.dto.event
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      concurrency: 4
 
 xxl:
   job:
     admin:
-      addresses: http://localhost:8087/xxl-job-admin
+      addresses: http://localhost:18087/xxl-job-admin
     access-token: default_token
     executor:
       appname: reconciliation-service
+
+management:
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    prometheus:
+      enabled: true

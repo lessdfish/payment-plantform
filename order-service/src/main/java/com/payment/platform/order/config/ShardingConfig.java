@@ -20,33 +20,41 @@ public class ShardingConfig {
                   ds0:
                     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
                     driverClassName: com.mysql.cj.jdbc.Driver
-                    jdbcUrl: jdbc:mysql://localhost:3306/payment_order_0?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+                    jdbcUrl: jdbc:mysql://localhost:13306/payment_order_0?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
                     username: root
                     password: root123
+                    maximumPoolSize: 20
+                    minimumIdle: 3
                   ds1:
                     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
                     driverClassName: com.mysql.cj.jdbc.Driver
                     jdbcUrl: jdbc:mysql://localhost:3307/payment_order_0?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
                     username: root
                     password: root123
+                    maximumPoolSize: 20
+                    minimumIdle: 3
                   ds2:
                     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
                     driverClassName: com.mysql.cj.jdbc.Driver
                     jdbcUrl: jdbc:mysql://localhost:3308/payment_order_0?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
                     username: root
                     password: root123
+                    maximumPoolSize: 20
+                    minimumIdle: 3
                   ds3:
                     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
                     driverClassName: com.mysql.cj.jdbc.Driver
                     jdbcUrl: jdbc:mysql://localhost:3309/payment_order_0?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
                     username: root
                     password: root123
+                    maximumPoolSize: 20
+                    minimumIdle: 3
 
                 rules:
                 - !SHARDING
                   tables:
-                    order:
-                      actualDataNodes: ds${0..3}.`order`
+                    payment_order:
+                      actualDataNodes: ds${0..3}.payment_order
                       databaseStrategy:
                         standard:
                           shardingColumn: merchant_id

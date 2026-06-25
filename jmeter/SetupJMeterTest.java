@@ -26,8 +26,8 @@ public class SetupJMeterTest {
 
     private static final RestClient CLIENT = RestClient.create();
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final String MERCHANT_URL = "http://localhost:8085/api/v1/merchant";
-    private static final String ACCOUNT_URL = "http://localhost:8081/api/v1/account";
+    private static final String MERCHANT_URL = "http://localhost:18085/api/v1/merchant";
+    private static final String ACCOUNT_URL = "http://localhost:18081/api/v1/account";
 
     public static void main(String[] args) throws Exception {
         // 1. 注册商户

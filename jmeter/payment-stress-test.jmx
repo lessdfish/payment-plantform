@@ -10,19 +10,19 @@
         <collectionProp name="Arguments.arguments">
           <elementProp name="BASE_URL" elementType="Argument">
             <stringProp name="Argument.name">BASE_URL</stringProp>
-            <stringProp name="Argument.value">http://localhost:8080</stringProp>
+            <stringProp name="Argument.value">http://localhost:18080</stringProp>
           </elementProp>
           <elementProp name="MERCHANT_URL" elementType="Argument">
             <stringProp name="Argument.name">MERCHANT_URL</stringProp>
-            <stringProp name="Argument.value">http://localhost:8085</stringProp>
+            <stringProp name="Argument.value">http://localhost:18085</stringProp>
           </elementProp>
           <elementProp name="ACCOUNT_URL" elementType="Argument">
             <stringProp name="Argument.name">ACCOUNT_URL</stringProp>
-            <stringProp name="Argument.value">http://localhost:8081</stringProp>
+            <stringProp name="Argument.value">http://localhost:18081</stringProp>
           </elementProp>
           <elementProp name="MERCHANT_ID" elementType="Argument">
             <stringProp name="Argument.name">MERCHANT_ID</stringProp>
-            <stringProp name="Argument.value">CHANGE_ME</stringProp>
+            <stringProp name="Argument.value">${__P(MERCHANT_ID,CHANGE_ME)}</stringProp>
           </elementProp>
           <elementProp name="PRIVATE_KEY" elementType="Argument">
             <stringProp name="Argument.name">PRIVATE_KEY</stringProp>
@@ -60,7 +60,9 @@
             </elementProp>
           </collectionProp>
         </elementProp>
-        <stringProp name="HTTPSampler.domain"></stringProp>
+        <stringProp name="HTTPSampler.domain">localhost</stringProp>
+        <stringProp name="HTTPSampler.port">18080</stringProp>
+        <stringProp name="HTTPSampler.protocol">http</stringProp>
         <stringProp name="HTTPSampler.path">/api/v1/pay/create</stringProp>
         <stringProp name="HTTPSampler.method">POST</stringProp>
         <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
@@ -102,6 +104,9 @@
             </elementProp>
           </collectionProp>
         </elementProp>
+        <stringProp name="HTTPSampler.domain">localhost</stringProp>
+        <stringProp name="HTTPSampler.port">18080</stringProp>
+        <stringProp name="HTTPSampler.protocol">http</stringProp>
         <stringProp name="HTTPSampler.path">/api/v1/pay/create</stringProp>
         <stringProp name="HTTPSampler.method">POST</stringProp>
       </HTTPSamplerProxy>
@@ -141,6 +146,9 @@
             </elementProp>
           </collectionProp>
         </elementProp>
+        <stringProp name="HTTPSampler.domain">localhost</stringProp>
+        <stringProp name="HTTPSampler.port">18080</stringProp>
+        <stringProp name="HTTPSampler.protocol">http</stringProp>
         <stringProp name="HTTPSampler.path">/api/v1/pay/create</stringProp>
         <stringProp name="HTTPSampler.method">POST</stringProp>
       </HTTPSamplerProxy>
@@ -171,6 +179,9 @@
     </ThreadGroup>
     <hashTree>
       <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="退款" enabled="true">
+        <stringProp name="HTTPSampler.domain">localhost</stringProp>
+        <stringProp name="HTTPSampler.port">18082</stringProp>
+        <stringProp name="HTTPSampler.protocol">http</stringProp>
         <stringProp name="HTTPSampler.path">/api/v1/refund/apply</stringProp>
         <stringProp name="HTTPSampler.method">POST</stringProp>
         <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
@@ -225,6 +236,9 @@
             </elementProp>
           </collectionProp>
         </elementProp>
+        <stringProp name="HTTPSampler.domain">localhost</stringProp>
+        <stringProp name="HTTPSampler.port">18080</stringProp>
+        <stringProp name="HTTPSampler.protocol">http</stringProp>
         <stringProp name="HTTPSampler.path">/api/v1/pay/create</stringProp>
         <stringProp name="HTTPSampler.method">POST</stringProp>
       </HTTPSamplerProxy>

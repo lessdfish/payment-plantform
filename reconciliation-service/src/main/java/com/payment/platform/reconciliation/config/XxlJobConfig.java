@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class XxlJobConfig {
 
-    @Value("${xxl.job.admin.addresses:http://localhost:8087/xxl-job-admin}")
+    @Value("${xxl.job.admin.addresses:http://localhost:18087/xxl-job-admin}")
     private String adminAddresses;
 
     @Value("${xxl.job.executor.appname:reconciliation-service}")

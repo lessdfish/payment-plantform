@@ -16,9 +16,12 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
      * 根据流水号查询（幂等键）。
      */
     Optional<Transaction> findByTxnId(String txnId);
+    Optional<Transaction> findByTxnIdAndMerchantId(String txnId, Long merchantId);
 
     /**
      * 根据外部订单号查询（幂等去重）。
      */
     Optional<Transaction> findByOutTradeNoAndTxnType(String outTradeNo, String txnType);
+    Optional<Transaction> findByOutTradeNoAndTxnTypeAndMerchantId(
+            String outTradeNo, String txnType, Long merchantId);
 }

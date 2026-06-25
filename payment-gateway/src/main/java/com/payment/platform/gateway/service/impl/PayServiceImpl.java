@@ -12,6 +12,7 @@ import com.payment.platform.common.exception.SignatureException;
 import com.payment.platform.gateway.client.AccountClient;
 import com.payment.platform.gateway.client.ChannelSimulatorClient;
 import com.payment.platform.gateway.client.OrderClient;
+import com.payment.platform.gateway.client.PayProcessProducer;
 import com.payment.platform.gateway.dto.RiskCheckResult;
 import com.payment.platform.gateway.dto.RouteResult;
 import com.payment.platform.gateway.service.ChannelRouterService;
@@ -23,11 +24,16 @@ import com.payment.platform.common.dto.request.ChannelPayRequest;
 import com.payment.platform.common.dto.response.ChannelPayResponse;
 import com.payment.platform.common.dto.response.ChannelQueryResponse;
 import com.payment.platform.common.dto.response.TryResponse;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.function.Supplier;
 
 /**
  * 支付服务实现 — 支付下单的核心业务逻辑。
@@ -48,7 +54,6 @@ import java.time.LocalDateTime;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class PayServiceImpl implements PayService {
 
     private final IdempotencyService idempotencyService;
@@ -58,7 +63,37 @@ public class PayServiceImpl implements PayService {
     private final ChannelSimulatorClient channelSimulatorClient;
     private final AccountClient accountClient;
     private final OrderClient orderClient;
+    private final PayProcessProducer payProcessProducer;
     private final ObjectMapper objectMapper;
+    private final TaskExecutor paymentPollExecutor;
+    private final MeterRegistry meterRegistry;
+    private final boolean asyncEnabled;
+
+    public PayServiceImpl(IdempotencyService idempotencyService,
+                          SignatureService signatureService,
+                          RiskService riskService,
+                          ChannelRouterService channelRouterService,
+                          ChannelSimulatorClient channelSimulatorClient,
+                          AccountClient accountClient,
+                          OrderClient orderClient,
+                          PayProcessProducer payProcessProducer,
+                          ObjectMapper objectMapper,
+                          @Qualifier("paymentPollExecutor") TaskExecutor paymentPollExecutor,
+                          MeterRegistry meterRegistry,
+                          @Value("${payment.async.enabled:true}") boolean asyncEnabled) {
+        this.idempotencyService = idempotencyService;
+        this.signatureService = signatureService;
+        this.riskService = riskService;
+        this.channelRouterService = channelRouterService;
+        this.channelSimulatorClient = channelSimulatorClient;
+        this.accountClient = accountClient;
+        this.orderClient = orderClient;
+        this.payProcessProducer = payProcessProducer;
+        this.objectMapper = objectMapper;
+        this.paymentPollExecutor = paymentPollExecutor;
+        this.meterRegistry = meterRegistry;
+        this.asyncEnabled = asyncEnabled;
+    }
 
     /**
      * 支付下单。
@@ -70,70 +105,139 @@ public class PayServiceImpl implements PayService {
         Long merchantId = request.getMerchantId();
         String outTradeNo = request.getOutTradeNo();
 
-        // 1. 幂等检查
-        String cachedResult = idempotencyService.check(merchantId, outTradeNo);
-        if (cachedResult != null) {
-            log.info("[PAY] 幂等命中: merchantId={}, outTradeNo={}", merchantId, outTradeNo);
-            throw new DuplicateRequestException(cachedResult);
+        String processingJson;
+        try {
+            processingJson = objectMapper.writeValueAsString(PayResponse.builder()
+                    .outTradeNo(outTradeNo)
+                    .payStatus("PROCESSING")
+                    .amount(request.getAmount())
+                    .build());
+        } catch (Exception e) {
+            throw new IllegalStateException("构造幂等占位失败", e);
         }
 
-        // 2. 验签
-        signatureService.verify(request, signature, timestamp, nonce, merchantId);
+        boolean reservationAcquired = false;
+        try {
+            // 1. 验签
+            signatureService.verify(request, signature, timestamp, nonce, merchantId);
 
-        // 3. 风控检查
-        RiskCheckResult riskResult = riskService.check(request, clientIp);
-        if (!riskResult.isPassed()) {
-            log.warn("[PAY] 风控拦截: merchantId={}, reason={}", merchantId, riskResult.getRejectReason());
-            throw new BusinessException(riskResult.getErrorCode(), riskResult.getRejectReason());
+            // 2. 风控检查
+            RiskCheckResult riskResult = riskService.check(request, clientIp);
+            if (!riskResult.isPassed()) {
+                log.warn("[PAY] 风控拦截: merchantId={}, reason={}", merchantId, riskResult.getRejectReason());
+                throw new BusinessException(riskResult.getErrorCode(), riskResult.getRejectReason());
+            }
+
+            // 3. 原子幂等占位
+            String cachedResult = timed("idempotency.reserve", () ->
+                    idempotencyService.reserve(
+                            merchantId, outTradeNo, processingJson));
+            if (cachedResult != null) {
+                log.info("[PAY] 幂等命中: merchantId={}, outTradeNo={}", merchantId, outTradeNo);
+                throw new DuplicateRequestException(cachedResult);
+            }
+            reservationAcquired = true;
+
+            if (asyncEnabled) {
+                timed("event.accept", () -> payProcessProducer.send(request));
+                return PayResponse.builder()
+                        .outTradeNo(outTradeNo)
+                        .payStatus("PROCESSING")
+                        .amount(request.getAmount())
+                        .build();
+            }
+
+            PayResponse payResponse = executePayment(request, false);
+            String resultJson = objectMapper.writeValueAsString(payResponse);
+            timed("idempotency.save", () ->
+                    idempotencyService.save(merchantId, outTradeNo, resultJson));
+
+            return payResponse;
+        } catch (RuntimeException e) {
+            if (reservationAcquired) {
+                idempotencyService.release(merchantId, outTradeNo);
+            }
+            throw e;
+        } catch (Exception e) {
+            if (reservationAcquired) {
+                idempotencyService.release(merchantId, outTradeNo);
+            }
+            throw new RuntimeException("支付处理失败", e);
+        }
+    }
+
+    @Override
+    public void processAccepted(PayRequest request) {
+        String existing = idempotencyService.check(
+                request.getMerchantId(), request.getOutTradeNo());
+        if (isFinalResult(existing)) {
+            return;
         }
 
-        // 4. 渠道路由
-        RouteResult route = channelRouterService.route(merchantId, request.getAmount());
+        try {
+            PayResponse response = executePayment(request, true);
+            idempotencyService.save(
+                    request.getMerchantId(),
+                    request.getOutTradeNo(),
+                    objectMapper.writeValueAsString(response));
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "异步支付结果保存失败: " + request.getOutTradeNo(), e);
+        }
+    }
 
-        // 5. 调用渠道模拟器
+    private PayResponse executePayment(PayRequest request, boolean asyncWorker) {
+        RouteResult route = timed("route", () ->
+                channelRouterService.route(
+                        request.getMerchantId(), request.getAmount()));
+
         ChannelPayRequest channelRequest = new ChannelPayRequest();
-        channelRequest.setOutTradeNo(outTradeNo);
+        channelRequest.setOutTradeNo(request.getOutTradeNo());
         channelRequest.setAmount(request.getAmount());
         channelRequest.setChannelType(route.getChannelType());
 
         ChannelPayResponse channelResponse;
         try {
-            channelResponse = channelSimulatorClient.pay(channelRequest);
+            channelResponse = timed("channel.pay", () ->
+                    channelSimulatorClient.pay(channelRequest));
         } catch (Exception e) {
-            // 调用渠道本身超时 → 当作 UNKNOWN，需要查单
-            log.error("[PAY] 调用渠道异常，当作 UNKNOWN: outTradeNo={}", outTradeNo, e);
+            log.error("[PAY] 调用渠道异常，当作 UNKNOWN: outTradeNo={}",
+                    request.getOutTradeNo(), e);
             channelResponse = ChannelPayResponse.builder()
-                    .outTradeNo(outTradeNo)
+                    .outTradeNo(request.getOutTradeNo())
                     .amount(request.getAmount())
                     .status("UNKNOWN")
                     .message("渠道调用超时")
                     .build();
         }
 
-        // 根据渠道返回结果走不同分支
-        PayResponse payResponse;
-        switch (channelResponse.getStatus()) {
-            case "SUCCESS":
-                payResponse = handleSuccess(request, channelResponse, route);
-                break;
-            case "FAIL":
-                payResponse = handleFail(request, channelResponse);
-                break;
-            case "UNKNOWN":
-            default:
-                payResponse = handleUnknown(request, channelResponse);
-                break;
-        }
+        return switch (channelResponse.getStatus()) {
+            case "SUCCESS" -> handleSuccess(request, channelResponse);
+            case "FAIL" -> asyncWorker
+                    ? PayResponse.builder()
+                            .outTradeNo(request.getOutTradeNo())
+                            .payStatus("FAIL")
+                            .amount(request.getAmount())
+                            .build()
+                    : handleFail(request, channelResponse);
+            case "UNKNOWN" -> handleUnknown(request);
+            default -> handleUnknown(request);
+        };
+    }
 
-        // 记录幂等结果
+    private boolean isFinalResult(String resultJson) {
+        if (resultJson == null) {
+            return false;
+        }
         try {
-            String resultJson = objectMapper.writeValueAsString(payResponse);
-            idempotencyService.save(merchantId, outTradeNo, resultJson);
+            String status = objectMapper.readValue(
+                    resultJson, PayResponse.class).getPayStatus();
+            return "SUCCESS".equals(status) || "FAIL".equals(status);
         } catch (Exception e) {
-            log.error("[PAY] 记录幂等结果失败: outTradeNo={}", outTradeNo, e);
+            return false;
         }
-
-        return payResponse;
     }
 
     /**
@@ -147,10 +251,17 @@ public class PayServiceImpl implements PayService {
                 request.getMerchantId(), request.getOutTradeNo());
 
         if (cachedResult != null) {
-            return PayQueryResponse.builder()
-                    .outTradeNo(request.getOutTradeNo())
-                    .payStatus("SUCCESS")
-                    .build();
+            try {
+                PayResponse cached = objectMapper.readValue(cachedResult, PayResponse.class);
+                return PayQueryResponse.builder()
+                        .outTradeNo(cached.getOutTradeNo())
+                        .payStatus(cached.getPayStatus())
+                        .amount(cached.getAmount())
+                        .build();
+            } catch (Exception e) {
+                log.error("[PAY] 幂等结果反序列化失败: outTradeNo={}",
+                        request.getOutTradeNo(), e);
+            }
         }
 
         return PayQueryResponse.builder()
@@ -163,25 +274,22 @@ public class PayServiceImpl implements PayService {
      * 渠道返回 SUCCESS — TCC 扣款 + MQ 通知。
      */
     private PayResponse handleSuccess(PayRequest request,
-                                       ChannelPayResponse channelResponse,
-                                       RouteResult route) {
+                                       ChannelPayResponse channelResponse) {
         log.info("[PAY] 支付成功，开始TCC扣款: outTradeNo={}, amount={}",
                 request.getOutTradeNo(), request.getAmount());
 
-        TryResponse tryResult = null;
         try {
-            // TCC Try：冻结余额
-            tryResult = accountClient.tryFreeze(request.getMerchantId(),
-                    request.getAmount(), request.getOutTradeNo());
-
-            // TCC Confirm：确认扣款 + 生成复式流水
-            accountClient.confirm(tryResult.getTccId());
+            // 账户服务内连续执行 TCC Try/Confirm，减少一次跨服务 HTTP 往返。
+            TryResponse tryResult = timed("account.execute", () ->
+                    accountClient.executePayment(request.getMerchantId(),
+                            request.getAmount(), request.getOutTradeNo()));
 
             // 发送 RocketMQ 支付成功事件（order-service + notification-service 消费）
             try {
-                orderClient.sendPaySuccessEvent(request.getOutTradeNo(),
-                        request.getMerchantId(), request.getAmount(),
-                        channelResponse.getChannelOrderNo());
+                timed("event.publish", () ->
+                        orderClient.sendPaySuccessEvent(request.getOutTradeNo(),
+                                request.getMerchantId(), request.getAmount(),
+                                channelResponse.getChannelOrderNo(), request.getNotifyUrl()));
             } catch (Exception mqEx) {
                 log.error("[PAY] 支付已确认，支付成功事件发送失败: outTradeNo={}",
                         request.getOutTradeNo(), mqEx);
@@ -191,16 +299,8 @@ public class PayServiceImpl implements PayService {
                     request.getOutTradeNo(), tryResult.getTccId());
 
         } catch (Exception e) {
-            // TCC 异常补偿：如果 Confirm 失败，执行 Cancel 释放冻结
-            log.error("[PAY] TCC扣款异常，执行补偿: outTradeNo={}", request.getOutTradeNo(), e);
-            if (tryResult != null) {
-                try {
-                    accountClient.cancel(tryResult.getTccId());
-                    log.info("[PAY] TCC补偿完成: tccId={}", tryResult.getTccId());
-                } catch (Exception cancelEx) {
-                    log.error("[PAY] TCC补偿失败，需人工处理: tccId={}", tryResult.getTccId(), cancelEx);
-                }
-            }
+            // execute 接口在 Confirm 失败时已于账户服务内执行 Cancel。
+            log.error("[PAY] TCC扣款异常: outTradeNo={}", request.getOutTradeNo(), e);
             throw new RuntimeException("支付处理失败", e);
         }
 
@@ -229,26 +329,9 @@ public class PayServiceImpl implements PayService {
     /**
      * 渠道返回 UNKNOWN — 标记 processing，后台轮询查单。
      */
-    private PayResponse handleUnknown(PayRequest request,
-                                       ChannelPayResponse channelResponse) {
+    private PayResponse handleUnknown(PayRequest request) {
         log.warn("[PAY] 渠道返回 UNKNOWN: outTradeNo={}", request.getOutTradeNo());
-
-        // 启动查单轮询（Phase 1 简化：查 3 次，间隔 2s/5s/10s）
-        pollForResult(request.getOutTradeNo());
-
-        // 查单后重新获取结果
-        ChannelQueryResponse queryResult = channelSimulatorClient.query(request.getOutTradeNo());
-        if (queryResult != null && "SUCCESS".equals(queryResult.getStatus())) {
-            return PayResponse.builder()
-                    .outTradeNo(request.getOutTradeNo())
-                    .payStatus("SUCCESS")
-                    .amount(request.getAmount())
-                    .channelOrderNo(queryResult.getChannelOrderNo())
-                    .paidTime(queryResult.getQueryTime())
-                    .build();
-        }
-
-        // 三次仍 UNKNOWN → 返回 processing 状态（商户稍后查询）
+        paymentPollExecutor.execute(() -> pollForResult(request));
         return PayResponse.builder()
                 .outTradeNo(request.getOutTradeNo())
                 .payStatus("PROCESSING")
@@ -260,7 +343,8 @@ public class PayServiceImpl implements PayService {
      * UNKNOWN 状态轮询查单。
      * <p>Phase 1 简化实现：查 3 次，间隔 2s/5s/10s。</p>
      */
-    private void pollForResult(String outTradeNo) {
+    private void pollForResult(PayRequest request) {
+        String outTradeNo = request.getOutTradeNo();
         long[] delays = {2000, 5000, 10000}; // 2s, 5s, 10s
         for (long delay : delays) {
             try {
@@ -272,9 +356,46 @@ public class PayServiceImpl implements PayService {
             ChannelQueryResponse result = channelSimulatorClient.query(outTradeNo);
             log.info("[PAY] 查单: outTradeNo={}, status={}", outTradeNo,
                     result != null ? result.getStatus() : "ERROR");
-            if (result != null && !"UNKNOWN".equals(result.getStatus())) {
-                return; // 查到明确结果
+            if (result == null || "UNKNOWN".equals(result.getStatus())) {
+                continue;
             }
+            try {
+                PayResponse finalResponse;
+                if ("SUCCESS".equals(result.getStatus())) {
+                    ChannelPayResponse channelResponse = ChannelPayResponse.builder()
+                            .outTradeNo(outTradeNo)
+                            .amount(request.getAmount())
+                            .channelOrderNo(result.getChannelOrderNo())
+                            .status("SUCCESS")
+                            .build();
+                    finalResponse = handleSuccess(request, channelResponse);
+                } else {
+                    finalResponse = PayResponse.builder()
+                            .outTradeNo(outTradeNo)
+                            .payStatus("FAIL")
+                            .amount(request.getAmount())
+                            .build();
+                }
+                idempotencyService.save(request.getMerchantId(), outTradeNo,
+                        objectMapper.writeValueAsString(finalResponse));
+            } catch (Exception e) {
+                log.error("[PAY] UNKNOWN 查单结果处理失败: outTradeNo={}", outTradeNo, e);
+            }
+            return;
         }
+    }
+
+    private <T> T timed(String stage, Supplier<T> action) {
+        return Timer.builder("payment.stage")
+                .tag("stage", stage)
+                .register(meterRegistry)
+                .record(action);
+    }
+
+    private void timed(String stage, Runnable action) {
+        Timer.builder("payment.stage")
+                .tag("stage", stage)
+                .register(meterRegistry)
+                .record(action);
     }
 }

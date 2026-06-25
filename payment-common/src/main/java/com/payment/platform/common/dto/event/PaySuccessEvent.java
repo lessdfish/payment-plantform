@@ -32,6 +32,9 @@ public class PaySuccessEvent implements Serializable {
     /** 渠道订单号 */
     private String channelOrderNo;
 
+    /** 商户支付结果回调地址 */
+    private String notifyUrl;
+
     /** 支付完成时间（时间戳毫秒） */
     private long paidTime;
 }

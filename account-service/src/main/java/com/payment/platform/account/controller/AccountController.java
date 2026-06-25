@@ -1,6 +1,8 @@
 package com.payment.platform.account.controller;
 
 import com.payment.platform.account.service.AccountService;
+import com.payment.platform.account.entity.Transaction;
+import com.payment.platform.account.repository.TransactionRepository;
 import com.payment.platform.common.dto.response.AccountBalanceResponse;
 import com.payment.platform.common.result.ApiResult;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +24,7 @@ import java.math.BigDecimal;
 public class AccountController {
 
     private final AccountService accountService;
+    private final TransactionRepository transactionRepository;
 
     /**
      * 查询商户账户余额。
@@ -40,5 +43,22 @@ public class AccountController {
                                      @RequestParam String outTradeNo) {
         accountService.recharge(merchantId, amount, outTradeNo);
         return ApiResult.success();
+    }
+
+    @PostMapping("/refund/{merchantId}")
+    public ApiResult<Void> refund(@PathVariable Long merchantId,
+                                  @RequestParam BigDecimal amount,
+                                  @RequestParam String outRefundNo) {
+        accountService.refund(merchantId, amount, outRefundNo);
+        return ApiResult.success();
+    }
+
+    @GetMapping("/transaction/{txnId}")
+    public ApiResult<Transaction> getTransaction(@PathVariable String txnId,
+                                                  @RequestParam Long merchantId) {
+        return ApiResult.success(transactionRepository
+                .findByTxnIdAndMerchantId(txnId, merchantId)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException(
+                        "交易不存在: " + txnId)));
     }
 }

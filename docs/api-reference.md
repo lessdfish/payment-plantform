@@ -135,7 +135,7 @@ Response: { "code": 0, "data": [{ "channelOrderNo": "...", "amount": 99.99, "sta
 
 ---
 
-## 三、支付网关 — payment-gateway（8080）
+##
 
 ### 3.1 支付下单（商户核心接口）
 
@@ -157,11 +157,13 @@ Request:
     "subject": "会员充值"
 }
 
-Response (成功):
-{ "code": 0, "data": { "outTradeNo": "MCH001", "payStatus": "SUCCESS", "amount": 99.99, "channelOrderNo": "CH...", "paidTime": "2024-06-19T12:00:00" } }
-
-Response (渠道处理中):
+Response (可靠受理成功，默认异步模式):
 { "code": 0, "data": { "outTradeNo": "MCH001", "payStatus": "PROCESSING" } }
+
+说明:
+- 返回 PROCESSING 表示请求已通过验签、风控和幂等检查，并已可靠写入 pay-process 队列。
+- 最终 SUCCESS/FAIL 状态通过支付查单接口或商户回调获取。
+- 仅在 payment.async.enabled=false 时，接口同步等待渠道和账务处理并直接返回最终结果。
 
 Response (幂等重复):
 { "code": 20001, "message": "请求已处理，返回原结果" }

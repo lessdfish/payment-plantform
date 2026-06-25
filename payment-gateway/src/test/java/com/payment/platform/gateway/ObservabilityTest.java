@@ -1,6 +1,11 @@
 package com.payment.platform.gateway;
 
 import org.junit.jupiter.api.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.web.client.RestClient;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -9,16 +14,41 @@ import static org.junit.jupiter.api.Assertions.*;
  * 可观测性验收测试。
  * <p>运行前需启动：Docker(含 Prometheus:9090, Grafana:3000) + 7 个服务</p>
  */
+@SpringBootTest(
+        classes = GatewayApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {
+                "spring.cloud.discovery.enabled=false",
+                "spring.cloud.nacos.discovery.enabled=false",
+                "spring.cloud.nacos.discovery.register-enabled=false",
+                "spring.autoconfigure.exclude=org.apache.rocketmq.spring.autoconfigure.RocketMQAutoConfiguration",
+                "management.prometheus.metrics.export.enabled=true",
+                "management.endpoints.web.exposure.include=health,metrics,prometheus",
+                "management.endpoint.prometheus.enabled=true"
+        }
+)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ObservabilityTest {
 
     private static final RestClient CLIENT = RestClient.create();
 
+    @LocalServerPort
+    private int port;
+
+    @Autowired
+    private RestClient.Builder restClientBuilder;
+
+    @MockBean
+    private RocketMQTemplate rocketMQTemplate;
+
     @Test
     @Order(1)
     void tc01_prometheusEndpoint() {
-        String response = CLIENT.get()
-                .uri("http://localhost:8080/actuator/prometheus")
+        RestClient client = restClientBuilder.baseUrl("http://localhost:" + port).build();
+        client.get().uri("/actuator/health").retrieve().toBodilessEntity();
+
+        String response = client.get()
+                .uri("/actuator/prometheus")
                 .retrieve()
                 .body(String.class);
         System.out.println("TC01 Prometheus 指标样例(前200字符): " + response.substring(0, Math.min(200, response.length())));

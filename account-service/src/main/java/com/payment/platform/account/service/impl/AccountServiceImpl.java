@@ -7,6 +7,7 @@ import com.payment.platform.account.repository.AccountRepository;
 import com.payment.platform.account.repository.TransactionRepository;
 import com.payment.platform.account.service.AccountService;
 import com.payment.platform.common.dto.response.AccountBalanceResponse;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,8 @@ public class AccountServiceImpl implements AccountService {
 
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
+    private final com.payment.platform.account.service.JournalService journalService;
+    private final EntityManager entityManager;
 
     @Override
     public AccountBalanceResponse getBalance(Long merchantId) {
@@ -44,13 +47,14 @@ public class AccountServiceImpl implements AccountService {
     @Transactional
     public void recharge(Long merchantId, BigDecimal amount, String outTradeNo) {
         // 幂等检查
-        if (transactionRepository.findByOutTradeNoAndTxnType(outTradeNo, "RECHARGE").isPresent()) {
+        if (transactionRepository.findByOutTradeNoAndTxnTypeAndMerchantId(
+                outTradeNo, "RECHARGE", merchantId).isPresent()) {
             log.info("[RECHARGE] 幂等命中: outTradeNo={}", outTradeNo);
             return;
         }
 
         // 获取或创建账户
-        Account account = accountRepository.findByMerchantId(merchantId)
+        Account account = accountRepository.findByMerchantIdForUpdate(merchantId)
                 .orElseGet(() -> {
                     Account newAccount = Account.builder()
                             .id(IdUtil.getSnowflake(2, 1).nextId())
@@ -62,12 +66,12 @@ public class AccountServiceImpl implements AccountService {
                             .updateTime(LocalDateTime.now())
                             .build();
                     log.info("[ACCOUNT] 创建新账户: merchantId={}", merchantId);
-                    return accountRepository.save(newAccount);
+                    entityManager.persist(newAccount);
+                    return newAccount;
                 });
 
         // 增加余额
         account.setBalance(account.getBalance().add(amount));
-        accountRepository.save(account);
 
         // 记录交易
         Transaction txn = Transaction.builder()
@@ -80,9 +84,39 @@ public class AccountServiceImpl implements AccountService {
                 .status("SUCCESS")
                 .createTime(LocalDateTime.now())
                 .build();
-        transactionRepository.save(txn);
+        entityManager.persist(txn);
 
         log.info("[RECHARGE] 充值成功: merchantId={}, amount={}, balanceAfter={}",
+                merchantId, amount, account.getBalance());
+    }
+
+    @Override
+    @Transactional
+    public void refund(Long merchantId, BigDecimal amount, String outRefundNo) {
+        Account account = accountRepository.findByMerchantIdForUpdate(merchantId)
+                .orElseThrow(() -> new EntityNotFoundException("账户不存在: " + merchantId));
+        if (transactionRepository.findByOutTradeNoAndTxnTypeAndMerchantId(
+                outRefundNo, "REFUND", merchantId).isPresent()) {
+            log.info("[REFUND] 幂等命中: outRefundNo={}", outRefundNo);
+            return;
+        }
+
+        account.setBalance(account.getBalance().add(amount));
+
+        String txnId = "RFN" + System.currentTimeMillis()
+                + IdUtil.fastSimpleUUID().substring(0, 6);
+        entityManager.persist(Transaction.builder()
+                .id(IdUtil.getSnowflake(2, 1).nextId())
+                .txnId(txnId)
+                .merchantId(merchantId)
+                .amount(amount)
+                .txnType("REFUND")
+                .outTradeNo(outRefundNo)
+                .status("SUCCESS")
+                .createTime(LocalDateTime.now())
+                .build());
+        journalService.record(txnId, 0L, account.getId(), amount, "REFUND", merchantId);
+        log.info("[REFUND] 退款入账成功: merchantId={}, amount={}, balanceAfter={}",
                 merchantId, amount, account.getBalance());
     }
 }
